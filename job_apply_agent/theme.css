@@ -1,0 +1,237 @@
+/* Job Application Agent: "proof desk" theme.
+   An ink sidebar, a cool grey desk, white sheets for documents, and one highlighter
+   mark (brand + run meter). Native widget colours come from .streamlit/config.toml;
+   this file adds layout, type and the custom pieces built in job_apply_agent/ui.py.
+   No external fonts: Bahnschrift (Windows) falls back to Streamlit's bundled Source Sans,
+   and document text uses Streamlit's bundled Source Serif. */
+
+:root {
+  --ink: #16213A;
+  --ink-2: #1F2D4D;
+  --ink-3: #2E3E63;
+  --desk: #EDF0F5;
+  --sheet: #FFFFFF;
+  --line: #D7DCE6;
+  --muted: #5A6479;
+  --proof: #2550D9;
+  --marker: #FFD93D;
+  --ok: #17724A;
+  --ok-bg: #E3F3EA;
+  --bad: #B42318;
+  --bad-bg: #FBE7E4;
+  --wait: #8A5A00;
+  --wait-bg: #FFF3CC;
+  --display: "Bahnschrift", "Segoe UI Variable Display", "Source Sans", system-ui, sans-serif;
+  --doc: "Source Serif", Georgia, "Times New Roman", serif;
+}
+
+/* ---------------------------------------------------------------- page frame */
+[data-testid="stMainBlockContainer"] {
+  max-width: 62rem;
+  padding-top: 2.75rem;
+  padding-bottom: 5rem;
+}
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="stHeaderActionElements"] { display: none; }
+
+h1, h2, h3, h4 { font-family: var(--display); letter-spacing: -0.01em; color: var(--ink); }
+
+.page-head { margin-bottom: 1.75rem; }
+.page-head h1 {
+  font-family: var(--display);
+  font-size: 2.35rem;
+  font-weight: 650;
+  line-height: 1.1;
+  margin: 0 0 0.6rem;
+  padding: 0;
+}
+.page-head p {
+  max-width: 40rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.section-title {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 650;
+  margin: 2.5rem 0 0.9rem;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------- sidebar */
+[data-testid="stSidebar"] { border-right: 0; }
+[data-testid="stSidebarHeader"] { display: none; }
+[data-testid="stSidebarUserContent"] { padding: 1.6rem 0.5rem 2rem; }
+
+.brand { display: flex; gap: 0.75rem; align-items: flex-start; margin: 0 0 1.75rem; padding: 0 0.5rem; }
+.brand-mark {
+  flex: none;
+  width: 0.9rem;
+  height: 2.2rem;
+  margin-top: 0.1rem;
+  background: var(--marker);
+  transform: skewX(-12deg);
+  border-radius: 1px;
+}
+.brand-name { font-family: var(--display); font-size: 1.15rem; font-weight: 650; line-height: 1.15; color: #fff; }
+.brand-sub { margin-top: 0.3rem; font-size: 0.82rem; line-height: 1.35; color: #A9B4CE; }
+
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"] {
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: #D5DCEE;
+  transition: background-color 120ms ease;
+}
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"]:hover { background: var(--ink-2); color: #fff; }
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"][aria-current="page"] {
+  background: var(--ink-2);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--marker);
+}
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"] p { font-weight: 550; font-size: 0.98rem; }
+
+.status { margin: 1.75rem 0.5rem 0; padding-top: 1.25rem; border-top: 1px solid var(--ink-3); }
+.status-head { display: flex; align-items: center; gap: 0.6rem; font-family: var(--display); font-size: 0.95rem; font-weight: 650; color: #fff; margin-bottom: 0.7rem; }
+.status-head:last-child { margin-bottom: 0; }
+.status-row { display: grid; grid-template-columns: 0.6rem 1fr; column-gap: 0.6rem; align-items: baseline; padding: 0.22rem 0; }
+.status-label { font-size: 0.88rem; color: #D5DCEE; }
+.status-detail { grid-column: 2; font-size: 0.78rem; color: #A9B4CE; margin-top: 0.05rem; }
+.dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ink-3); align-self: center; }
+.dot-ok { background: #4CC38A; }
+.dot-wait { background: var(--marker); }
+
+/* ------------------------------------------------------------------ the queue */
+[data-testid="stForm"] {
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem 1.25rem;
+}
+.qnum {
+  font-family: var(--display);
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: var(--muted);
+  padding-top: 0.35rem;
+  text-align: center;
+}
+[data-testid="stForm"] [data-testid="stExpander"] details { border: 0; background: transparent; }
+[data-testid="stForm"] [data-testid="stExpander"] summary { padding: 0.1rem 0; font-size: 0.9rem; color: var(--muted); }
+[data-testid="stForm"] [data-testid="stExpander"] summary:hover { color: var(--proof); }
+[class*="st-key-slot_"] { border-bottom: 1px solid #E6EAF2; padding: 0.35rem 0 0.2rem; }
+[data-testid="stForm"] [data-testid="stExpander"] [class*="st-key-slot_"]:last-child { border-bottom: 0; }
+
+/* -------------------------------------------------------------- inputs, buttons */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea {
+  background: #F7F8FB;
+  border-color: var(--line);
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus { background: #fff; }
+:focus-visible { outline: 2px solid var(--proof); outline-offset: 2px; }
+
+.stButton > button,
+[data-testid="stFormSubmitButton"] > button,
+[data-testid="stLinkButton"] a {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  border-radius: 6px;
+}
+[data-testid="stBaseButton-primaryFormSubmit"],
+[data-testid="stBaseButton-primary"] { padding: 0.5rem 1.4rem; }
+
+[data-testid="stExpander"] details { background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+[data-testid="stExpander"] summary { font-weight: 550; }
+
+[data-testid="stTabs"] [data-baseweb="tab"] { font-family: var(--display); font-weight: 600; font-size: 1rem; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: var(--proof); height: 3px; }
+
+[data-testid="stAlert"] { border-radius: 6px; }
+
+/* ----------------------------------------------------------------- chips, meter */
+.chip {
+  display: inline-block;
+  padding: 0.12rem 0.6rem;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.5;
+  background: #E7EBF3;
+  color: var(--muted);
+}
+.chip-ok { background: var(--ok-bg); color: var(--ok); }
+.chip-fail { background: var(--bad-bg); color: var(--bad); }
+.chip-wait { background: var(--wait-bg); color: var(--wait); }
+
+.meter { margin: 0 0 1.25rem; }
+.meter-label { font-size: 0.95rem; color: var(--muted); margin-bottom: 0.45rem; }
+.meter-label strong { color: var(--ink); font-family: var(--display); font-weight: 650; margin-right: 0.35rem; }
+.meter-track { height: 0.7rem; background: #DDE2EC; border-radius: 2px; overflow: hidden; }
+.meter-fill { height: 100%; background: var(--marker); transform: skewX(-12deg); transform-origin: left; margin-left: -0.3rem; }
+.meter-running .meter-fill {
+  background-image: repeating-linear-gradient(115deg, rgba(22, 33, 58, 0.09) 0 6px, transparent 6px 12px);
+  background-color: var(--marker);
+  background-size: 17px 100%;
+  animation: meter-move 900ms linear infinite;
+}
+.meter-interrupted .meter-fill { background: #B9C0D0; }
+@keyframes meter-move { to { background-position: 17px 0; } }
+
+/* ------------------------------------------------------------- result sheets */
+[class*="st-key-sheet_"] {
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem 0.6rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 0 1px 0 rgba(22, 33, 58, 0.04), 0 14px 28px -22px rgba(22, 33, 58, 0.45);
+}
+[class*="st-key-sheet_ok"] { border-left-color: var(--ok); }
+[class*="st-key-sheet_fail"] { border-left-color: var(--bad); }
+.sheet-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.8rem; }
+.sheet-head h3 { margin: 0; padding: 0; font-size: 1.2rem; font-weight: 650; line-height: 1.25; }
+.sheet-source {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[class*="st-key-sheet_"] [data-testid="stExpander"] details { border: 0; background: transparent; }
+[class*="st-key-sheet_"] [data-testid="stExpander"] summary { padding-left: 0; color: var(--muted); font-size: 0.9rem; }
+
+/* the CV and the letter read like documents: serif, generous leading, ~70 characters per line */
+[data-testid="stMain"] [class*="st-key-sheet_"] [data-testid="stTabPanel"] [data-testid="stTextArea"] textarea {
+  font-family: var(--doc);
+  font-size: 1.02rem;
+  line-height: 1.6;
+  background: #FFFEFB;
+  padding: 1.1rem 1.4rem;
+}
+
+/* ------------------------------------------------------------------ setup page */
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.6rem 1.2rem; margin: 0 0 1.75rem; }
+.check { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 0.65rem; align-items: baseline; }
+.check .chip { grid-row: 1 / 3; align-self: center; min-width: 3.6rem; text-align: center; }
+.check-label { font-family: var(--display); font-weight: 650; color: var(--ink); }
+.check-detail { font-size: 0.85rem; color: var(--muted); }
+[data-testid="stMain"] [data-testid="stTabPanel"] [data-testid="stTextArea"] textarea { font-family: "Source Code Pro", ui-monospace, Consolas, monospace; font-size: 0.86rem; line-height: 1.55; }
+
+/* ------------------------------------------------------------------ small screens */
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding-top: 1.5rem; }
+  .page-head h1 { font-size: 1.9rem; }
+  [data-testid="stForm"] { padding: 0.25rem 0.75rem 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .meter-running .meter-fill { animation: none; }
+  * { transition: none !important; }
+}

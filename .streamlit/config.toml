@@ -1,0 +1,30 @@
+[server]
+# The app has no login and can write to your Google Drive, so only this computer may reach it.
+address = "127.0.0.1"
+fileWatcherType = "none"
+runOnSave = false
+
+[browser]
+# This app promises that nothing leaves your machine, so don't send usage stats to Streamlit either.
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+# Colours and type are tuned in job_apply_agent/theme.css; these set the native widgets to match.
+[theme]
+base = "light"
+primaryColor = "#2550D9"
+backgroundColor = "#EDF0F5"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#16213A"
+borderColor = "#D7DCE6"
+baseRadius = "small"
+font = "sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#16213A"
+secondaryBackgroundColor = "#1F2D4D"
+textColor = "#E8ECF6"
+primaryColor = "#FFD93D"
+borderColor = "#2E3E63"

@@ -1,0 +1,18 @@
+# Tool configuration only: this is an app you run from its folder, not an installable package.
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "output"]
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, import order, bugbear, pyupgrade, simplify
+select = ["F", "E", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"job_apply_agent/llm.py" = ["E501"]  # prompt templates read better unwrapped
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

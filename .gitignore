@@ -1,0 +1,18 @@
+# Secrets and per-user state: never commit these
+credentials.json
+token.json
+local_settings.json
+
+# Personal content (templates live in content.example/) and generated output
+content/
+output/
+
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Marker written by tools/export_public.py (private project only)
+.exported-by-export_public

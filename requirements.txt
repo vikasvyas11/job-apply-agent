@@ -1,0 +1,10 @@
+# Lower bounds are the versions this project was last run with.
+streamlit>=1.62
+requests>=2.34
+beautifulsoup4>=4.15
+trafilatura>=2.2
+ddgs>=9.15
+google-api-python-client>=2.199
+google-auth-httplib2>=0.4
+google-auth-oauthlib>=1.4
+playwright>=1.62
