@@ -127,6 +127,7 @@ Past runs are listed under **Past runs** and stored in `output/runs/`.
 |---|---|
 | `Error 403: access_denied` when logging in to Google | Your account is not listed as a **Test user** on the OAuth consent screen. Add it (step 3) and retry. |
 | Google login suddenly required again after about a week | Normal for apps in Testing mode (refresh tokens expire after 7 days). Click **Connect Google account** on Setup, or delete `token.json`. |
+| `An Application Control policy has blocked this file` when starting Python (Windows) | Windows Smart App Control blocks unsigned programs, and some Python builds (for example ones installed by `uv`) ship an unsigned `python.exe`. Install Python from https://www.python.org/downloads/ (it is signed), delete the `.venv` folder and run `setup.bat` again. You do not need to turn Smart App Control off. |
 | `Missing .../credentials.json` | Step 3.5: the file must be named exactly `credentials.json` and sit in the project root. |
 | `404` from Drive on `files.copy` | Wrong template ID, or the account you logged in with cannot open the template. Re-verify on Setup. |
 | `Template doc is missing a required tab` | The tabs must be named exactly `CV` and `Cover Letter` (case and spacing matter). |
