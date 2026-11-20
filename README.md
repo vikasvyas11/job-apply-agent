@@ -55,14 +55,21 @@ Prefer the command line? `python -m job_apply_agent --job-url "https://..."` (se
 
 ## Make it yours
 
-Everything personal lives in four plain-text files in `content/`, which is git-ignored so you can never publish them by accident. The first run copies placeholder versions from `content.example/`.
+Each run uses one **flow** and one **region**, chosen at the top of the Applications page:
 
-| File | What goes in it |
+- **Flow**: *Data Science*, *Growth* or *Software Dev*. Each flow has its own master CV, project notes, cover letter reference and prompts, so you can present the same career three different ways. A run never reads the other flows' files.
+- **Region**: *UK* or *India* by default (add your own). It fills the city and phone on the CV's contact line; cover letters never include them.
+
+Everything personal lives in plain-text files in `content/<flow>/` (`data`, `growth`, `software`), which is git-ignored so you can never publish it by accident. The first run copies placeholder versions from `content.example/`.
+
+| File (per flow) | What goes in it |
 |---|---|
-| `resume.md` | Your complete CV, every role and project. The model selects from it. |
+| `resume.md` | Your complete CV for this kind of role. The model selects from it. The contact line uses `{{LOCATION}}` and `{{PHONE}}`. |
 | `coverletter_reference.md` | One cover letter in the voice you want, used for tone and structure only |
 | `project_notes.md` | The real story behind your CV bullets: problem, what you built, outcome |
 | `prompts.md` | The instructions given to the model, and your writing-style rules |
+
+Open **`Documentation.html`** for the full illustrated guide.
 
 See **[docs/CUSTOMISING.md](docs/CUSTOMISING.md)** for how to shape the output, change the model, adjust the CV layout, or send the result somewhere other than Google Docs.
 

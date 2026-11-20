@@ -7,6 +7,7 @@ Usage (from the project root):
 import argparse
 import logging
 
+from job_apply_agent import profiles
 from job_apply_agent.pipeline import JobInput, run_batch
 
 
@@ -23,6 +24,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--company", action="append", default=[],
         help="Optional company name override, matched by position to --job-url.",
     )
+    parser.add_argument(
+        "--flow", choices=sorted(profiles.FLOWS), default=profiles.DEFAULT_FLOW,
+        help="Which CV/cover letter flow to use for every job in this run (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--region", default=None,
+        help="Region whose location and phone go on the CV (default: the first region in your settings).",
+    )
     return parser
 
 
@@ -31,6 +40,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if len(args.company) > len(args.job_urls):
         parser.error("more --company values than --job-url values")
+    region = args.region or profiles.default_region()
+    if region not in profiles.regions():
+        parser.error(f"unknown --region {region!r}; choose from {', '.join(profiles.regions())}")
+    profile = profiles.Profile(flow=args.flow, region=region)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     companies = args.company + [""] * (len(args.job_urls) - len(args.company))
@@ -39,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         for url, company in zip(args.job_urls, companies, strict=True)
     ]
 
-    results = run_batch(jobs)
+    results = run_batch(jobs, profile=profile)
     for result in results:
         print(f"\n=== {result.job.url_or_text} ===")
         for line in result.log:

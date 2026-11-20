@@ -104,15 +104,18 @@ Add the optional Drive folder ID in `local_settings.json` (`output_folder_id`) i
 
 ### What the CV file needs
 
-The parser relies on a simple shape. Use `content.example/resume.md` as a model.
+Each flow (`content/data/`, `content/growth/`, `content/software/`) has its own CV; fill in at least the flows you will use. The parser relies on a simple shape. Use `content.example/data/resume.md` as a model.
 
-- **Line 1:** your name. **Line 2:** your contact line, with links as `[label](https://...)`.
+- **Line 1:** your name. **Line 2:** your contact line, with `{{LOCATION}}` and `{{PHONE}}` where your city and phone go (filled from the region you pick) and links as `[label](https://...)`.
+- Set each region's city and phone on the Setup page under **Profile**.
 - **Section headings in ALL CAPS** (`PROFESSIONAL SUMMARY`, `WORK EXPERIENCE`, `EDUCATION`, `PROJECTS`, `TECHNICAL SKILLS`, ...). Whatever headings you use, in whatever order, are the ones the tailored CV keeps.
 - **Entries:** `**Job Title** | Organisation, Location | Mon YYYY - Mon YYYY`
 - **Bullets:** lines starting with `* `.
 - Put in **everything**: every role, project and skill. The model selects the relevant parts per job, so a longer, accurate master CV gives better results than a trimmed one.
 
 ## 7. Generate your first application
+
+At the top of the page choose the **Application type** (the flow: Data Science, Growth or Software Dev) and the **Region**. Every link in the batch uses that flow's CV and prompts only, so put one type of job in each run.
 
 1. On the main page paste a job URL into **Job 1**. Optionally add the company name, and paste the job description in the box underneath if you expect the link to be blocked (LinkedIn usually is).
 2. Click **Generate all**. You can add up to 10 jobs; they run one after another.

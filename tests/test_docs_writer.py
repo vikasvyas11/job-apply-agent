@@ -93,3 +93,30 @@ def test_refuses_without_a_template_id(content):
         docs_writer.create_application_doc(
             clients=None, company="A", job_title="B", cv_text="x" * 300, cover_letter_text="x" * 300
         )
+
+
+def test_cover_letter_gets_one_explicit_style_over_the_whole_text():
+    letter = "Dear Hiring Manager,\n\nBody.\n\nBest,\nJane\n"
+    paragraph, text = docs_writer.cover_letter_style_requests("t.2", letter)
+    rng = paragraph["updateParagraphStyle"]["range"]
+    assert (rng["startIndex"], rng["endIndex"], rng["tabId"]) == (1, 1 + len(letter), "t.2")
+    style = paragraph["updateParagraphStyle"]["paragraphStyle"]
+    assert style["lineSpacing"] == docs_writer.COVER_LETTER_LINE_SPACING_PCT
+    assert text["updateTextStyle"]["textStyle"]["fontSize"]["magnitude"] == docs_writer.COVER_LETTER_FONT_PT
+    assert text["updateTextStyle"]["range"]["endIndex"] <= 1 + len(letter)
+
+
+def test_login_status_missing_without_a_token(tmp_path, monkeypatch):
+    monkeypatch.setattr(docs_writer.config, "GOOGLE_TOKEN_FILE", tmp_path / "token.json")
+    assert docs_writer.login_status() == "missing"
+
+
+def test_non_interactive_clients_raise_instead_of_opening_a_browser(tmp_path, monkeypatch):
+    monkeypatch.setattr(docs_writer.config, "GOOGLE_TOKEN_FILE", tmp_path / "token.json")
+
+    def no_browser(*a, **k):
+        raise AssertionError("must not start an OAuth browser flow")
+
+    monkeypatch.setattr(docs_writer.InstalledAppFlow, "from_client_secrets_file", no_browser)
+    with pytest.raises(docs_writer.GoogleLoginRequired, match="Connect Google account"):
+        docs_writer.get_clients(interactive=False)

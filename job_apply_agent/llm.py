@@ -8,6 +8,7 @@ from pathlib import Path
 import requests
 
 from job_apply_agent import config
+from job_apply_agent.profiles import Profile
 from job_apply_agent.prompt_loader import load_prompts
 
 log = logging.getLogger(__name__)
@@ -148,16 +149,17 @@ def _read_content(path: Path) -> str:
         ) from exc
 
 
-def _read_cv_dump() -> str:
-    return _read_content(config.CV_DUMP_FILE)
+def _read_cv_dump(profile: Profile) -> str:
+    """The flow's master CV with the region's location and phone filled in."""
+    return profile.render(_read_content(profile.resume_file))
 
 
-def _read_cover_letter_reference() -> str:
-    return _read_content(config.COVER_LETTER_REFERENCE_FILE)
+def _read_cover_letter_reference(profile: Profile) -> str:
+    return _read_content(profile.cover_letter_reference_file)
 
 
-def _read_project_notes() -> str:
-    return _read_content(config.PROJECT_NOTES_FILE)
+def _read_project_notes(profile: Profile) -> str:
+    return _read_content(profile.project_notes_file)
 
 
 # A section heading in the master CV: optional markdown "#"s, optional "**"
@@ -181,10 +183,10 @@ def cv_section_headings(cv_dump: str) -> list[str]:
     return headings
 
 
-def build_cv_prompt(*, company: str, jd_text: str, research_block: str) -> str:
-    prompts = load_prompts()
-    cv_dump = _read_cv_dump()
-    project_notes = _read_project_notes()
+def build_cv_prompt(*, profile: Profile, company: str, jd_text: str, research_block: str) -> str:
+    prompts = load_prompts(profile.prompts_file)
+    cv_dump = _read_cv_dump(profile)
+    project_notes = _read_project_notes(profile)
     headings = cv_section_headings(cv_dump)
     heading_order = ", ".join(headings) if headings else "the headings that appear above"
 
@@ -248,6 +250,13 @@ CONTACT DETAILS — copy the name, location, email, phone number and links from
 the contact line in MY CURRENT CV above exactly as written (keep links in
 "[label](url)" markdown form). Never change, guess, or invent any of them.
 
+ACCURACY — every job, project and education entry must be one that appears in
+MY CURRENT CV, with its dates as written there. The ADDITIONAL PROJECT DETAIL is
+background for wording only: never turn it into a new entry, and never split
+one project into two. Keep my role exactly as described (if I "supported"
+something, say supported, not led). Write entry titles in normal title case as
+in my CV, not in capitals.
+
 THIS REQUEST IS FOR THE CV ONLY. A separate request will handle the cover
 letter. Do not write one here, and do not append one after the CV even if
 an earlier instruction mentioned producing "the resume and the cover
@@ -258,10 +267,12 @@ markdown code fences, no second document.
 """
 
 
-def build_cover_letter_prompt(*, company: str, jd_text: str, research_block: str, tailored_cv: str) -> str:
-    prompts = load_prompts()
-    reference_letter = _read_cover_letter_reference()
-    project_notes = _read_project_notes()
+def build_cover_letter_prompt(
+    *, profile: Profile, company: str, jd_text: str, research_block: str, tailored_cv: str
+) -> str:
+    prompts = load_prompts(profile.prompts_file)
+    reference_letter = _read_cover_letter_reference(profile)
+    project_notes = _read_project_notes(profile)
     first_name = config.APPLICANT_NAME.split()[0] if config.APPLICANT_NAME else "[Your first name]"
 
     return f"""{prompts.cover_letter}
@@ -290,9 +301,14 @@ Match its tone and register. Only the content (which requirements you cover,
 which examples you draw on, the narrative) should change, not the shape of
 the letter.
 
-CONTACT DETAILS — if you reference my name, location, email, phone or links,
-copy them from MY TAILORED CV above exactly as written. Never change, guess,
-or invent any of them.
+ACCURACY — only claim what my CV and project detail say I did, at the level
+they say it: if I "supported" something, say supported, not led. Never invent
+employers, projects, numbers or outcomes.
+
+CONTACT DETAILS — do not put my address, city, location or phone number
+anywhere in the letter. If you mention my name, email or links, copy them
+from MY TAILORED CV above exactly as written. Never change, guess, or invent
+any of them.
 
 THIS REQUEST IS FOR THE COVER LETTER ONLY. The CV above is reference
 material, not something to reproduce. Do not repeat CV section headings
@@ -308,13 +324,13 @@ second document.
 _SUMMARY_HEADING_RE = re.compile(r"PROFESSIONAL SUMMARY", re.IGNORECASE)
 
 
-def _real_cv_header() -> str:
+def _real_cv_header(profile: Profile) -> str:
     """The name + contact line from the real CV, lightly cleaned of markdown.
     Used to overwrite whatever header the model produced: LLMs have been
     observed inventing a plausible-looking but wrong phone number/location
     even when explicitly told not to, so this is enforced in code rather
     than left to prompt compliance."""
-    cv_dump = _read_cv_dump()
+    cv_dump = _read_cv_dump(profile)
     match = _SUMMARY_HEADING_RE.search(cv_dump)
     header_raw = cv_dump[: match.start()] if match else cv_dump.split("\n\n", 1)[0]
 
@@ -326,12 +342,101 @@ def _real_cv_header() -> str:
     return "\n".join(lines).strip()
 
 
-def _enforce_real_contact_header(tailored_cv: str) -> str:
-    real_header = _real_cv_header()
+def _enforce_real_contact_header(tailored_cv: str, profile: Profile) -> str:
+    real_header = _real_cv_header(profile)
     match = _SUMMARY_HEADING_RE.search(tailored_cv)
     if not real_header or not match:
         return tailored_cv  # can't safely locate the split point; leave generated text as-is
     return f"{real_header}\n\n{tailored_cv[match.start():]}"
+
+
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_BULLET_LINE_RE = re.compile(r"^[*-]\s")  # "* text"; a bold "**Title**" entry is not a bullet
+
+
+def _norm(text: str) -> str:
+    return _NON_ALNUM_RE.sub("", text.lower().replace("&", "and"))
+
+
+def _entry_key(line: str) -> tuple[str, str] | None:
+    """(title, organisation) of an entry line like "**Title** | Org, City | Dates",
+    normalised for comparison, or None if the line is not an entry."""
+    stripped = line.strip()
+    if _BULLET_LINE_RE.match(stripped) or stripped.count("|") < 2:
+        return None
+    title, org = (part.replace("*", "").strip() for part in stripped.split("|")[:2])
+    if not title or ":" in title:
+        return None
+    return _norm(title), _norm(org.split(",")[0])
+
+
+def _matches(generated: tuple[str, str], master: list[tuple[str, str]]) -> bool:
+    title, org = generated
+    for m_title, m_org in master:
+        if title and m_title and (title in m_title or m_title in title):
+            return True
+        if org and m_org and len(m_org) > 3 and (org == m_org or (m_org in org and title in m_title)):
+            return True
+    return False
+
+
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#.]*")
+
+
+def _master_casing(master_cv: str) -> dict[str, str]:
+    """lower-case word -> how the master CV's entry titles write it ("University",
+    "AI", "v2"). Only titles are used: bullets write the same words in lower case."""
+    casing: dict[str, str] = {}
+    for line in master_cv.splitlines():
+        if _entry_key(line):
+            for word in _WORD_RE.findall(line.split("|")[0]):
+                casing.setdefault(word.lower(), word)
+    return casing
+
+
+def _restore_title_casing(line: str, casing: dict[str, str]) -> str:
+    """Rewrite all-caps words in an entry's title (the part before the first "|")
+    the way the master CV writes them: "UNIVERSITY COLLEGE LONDON" ->
+    "University College London", "COHORT BUILDER V2" -> "Cohort Builder v2"."""
+    title, sep, rest = line.partition("|")
+
+    def fix(match: re.Match) -> str:
+        word = match.group(0)
+        if len(word) > 1 and word.isupper():
+            return casing.get(word.lower()) or (word if len(word) <= 3 else word.capitalize())
+        return word
+
+    return _WORD_RE.sub(fix, title) + sep + rest
+
+
+def drop_invented_entries(tailored_cv: str, master_cv: str) -> tuple[str, list[str]]:
+    """Remove any job/project/education entry whose title is not in the master CV,
+    together with its bullets. Local models have been seen splitting one project
+    into a made-up "v1" and "v2", or promoting background notes into new entries;
+    like the contact header, this is enforced in code. Returns (cv, removed titles)."""
+    master = [key for line in master_cv.splitlines() if (key := _entry_key(line))]
+    casing = _master_casing(master_cv)
+    out: list[str] = []
+    removed: list[str] = []
+    skipping = False
+    in_body = False  # the name/contact header above the first heading is never touched
+    for line in tailored_cv.splitlines():
+        if not in_body:
+            in_body = bool(_CV_HEADING_RE.match(line)) and line.strip().upper() == line.strip() and bool(line.strip())
+            out.append(line)
+            continue
+        key = _entry_key(line)
+        if key is not None:
+            skipping = not _matches(key, master)
+            if skipping:
+                removed.append(line.split("|")[0].replace("*", "").strip())
+                continue
+            line = _restore_title_casing(line, casing)
+        elif skipping and (_CV_HEADING_RE.match(line) and line.strip().upper() == line.strip()):
+            skipping = False  # a new section heading ends the dropped entry
+        if not skipping:
+            out.append(line)
+    return "\n".join(out) + ("\n" if tailored_cv.endswith("\n") else ""), removed
 
 
 # Markers that mean the model bled the *other* document into this one
@@ -352,21 +457,26 @@ _BANNED_PHRASES = (
 )
 
 
-def generate_cv(*, company: str, jd_text: str, research_block: str) -> str:
-    prompt = build_cv_prompt(company=company, jd_text=jd_text, research_block=research_block)
+def generate_cv(*, profile: Profile, company: str, jd_text: str, research_block: str) -> str:
+    prompt = build_cv_prompt(profile=profile, company=company, jd_text=jd_text, research_block=research_block)
     for _ in range(CV_ATTEMPTS):
         text = generate(prompt)
         if not any(marker in text.lower() for marker in _COVER_LETTER_MARKERS):
-            return _enforce_real_contact_header(text)
+            text, removed = drop_invented_entries(text, _read_cv_dump(profile))
+            if removed:
+                log.warning("Dropped entries not in the %s master CV: %s", profile.flow_label, removed)
+            return _enforce_real_contact_header(text, profile)
     raise OllamaError(
         "Generated CV kept containing a cover letter bled in (found a salutation like "
         "'Dear Hiring Manager') even after retrying. Refusing to use this output."
     )
 
 
-def generate_cover_letter(*, company: str, jd_text: str, research_block: str, tailored_cv: str) -> str:
+def generate_cover_letter(
+    *, profile: Profile, company: str, jd_text: str, research_block: str, tailored_cv: str
+) -> str:
     prompt = build_cover_letter_prompt(
-        company=company, jd_text=jd_text, research_block=research_block, tailored_cv=tailored_cv
+        profile=profile, company=company, jd_text=jd_text, research_block=research_block, tailored_cv=tailored_cv
     )
     best_clean_attempt = None
     for _ in range(COVER_LETTER_ATTEMPTS):

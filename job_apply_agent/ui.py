@@ -13,7 +13,7 @@ from pathlib import Path
 import requests
 import streamlit as st
 
-from job_apply_agent import config, local_settings
+from job_apply_agent import config, local_settings, profiles
 
 _CSS_FILE = Path(__file__).with_name("theme.css")
 OLLAMA_PROBE_TIMEOUT_SECONDS = 1.5
@@ -32,17 +32,22 @@ def readiness_checks(
     *,
     name: str,
     template_id: str,
-    cv_text: str,
-    placeholder_cv_text: str,
+    cv_flows_ready: list[str],
+    total_flows: int,
+    regions_ready: bool,
     credentials_exist: bool,
-    token_exists: bool,
+    google_login: str,
     ollama: str,
     model: str,
 ) -> list[Check]:
     """What still stands between a fresh install and a first generated application.
 
-    `ollama` is one of "ready", "no_model" or "down" (see ollama_status)."""
-    cv_is_real = bool(cv_text.strip()) and cv_text.strip() != placeholder_cv_text.strip()
+    `cv_flows_ready` lists the flows whose CV is no longer the placeholder; one
+    is enough to generate. `ollama` is "ready", "no_model" or "down"."""
+    n_ready = len(cv_flows_ready)
+    cv_detail = (
+        f"{n_ready} of {total_flows} flows ready" if n_ready else "Still the placeholder"
+    )
     ollama_detail = {
         "ready": f"{model} is pulled",
         "no_model": f"{model} is not pulled yet",
@@ -50,7 +55,11 @@ def readiness_checks(
     }[ollama]
     return [
         Check("name", "Your name", bool(name.strip()), name.strip() or "Not set"),
-        Check("cv", "Your CV", cv_is_real, "Saved" if cv_is_real else "Still the placeholder"),
+        Check("cv", "Your CVs", n_ready > 0, cv_detail),
+        Check(
+            "regions", "Contact details", regions_ready,
+            "Location and phone set" if regions_ready else "Add a location and phone for each region",
+        ),
         Check("model", "AI model", ollama == "ready", ollama_detail),
         Check(
             "client", "Google client file", credentials_exist,
@@ -60,7 +69,11 @@ def readiness_checks(
             "template", "Template document", bool(template_id.strip()),
             "ID saved" if template_id.strip() else "Not set",
         ),
-        Check("login", "Google login", token_exists, "Connected" if token_exists else "Not connected"),
+        Check("login", "Google login", google_login == "connected", {
+            "connected": "Connected",
+            "expired": "Expired: reconnect on Setup",
+            "missing": "Not connected",
+        }[google_login]),
     ]
 
 
@@ -77,16 +90,36 @@ def ollama_status(model: str) -> str:
     return "ready" if model in names else "no_model"
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def google_login_status() -> str:
+    """Cached: checking can mean a round trip to Google's token endpoint."""
+    from job_apply_agent import docs_writer  # Google client libraries are slow to import
+
+    return docs_writer.login_status()
+
+
+def flows_with_real_cv() -> list[str]:
+    """Flows whose master CV has been edited away from the content.example placeholder."""
+    ready = []
+    for flow in profiles.FLOWS:
+        text = _read(profiles.flow_dir(flow) / "resume.md").strip()
+        placeholder = _read(config.CONTENT_TEMPLATE_DIR / flow / "resume.md").strip()
+        if text and text != placeholder:
+            ready.append(flow)
+    return ready
+
+
 def current_checks() -> list[Check]:
     settings = local_settings.load()
-    cv_text = _read(config.CV_DUMP_FILE)
+    regions = profiles.regions()
     return readiness_checks(
         name=settings["applicant_name"],
         template_id=settings["template_doc_id"],
-        cv_text=cv_text,
-        placeholder_cv_text=_read(config.CONTENT_TEMPLATE_DIR / "resume.md"),
+        cv_flows_ready=flows_with_real_cv(),
+        total_flows=len(profiles.FLOWS),
+        regions_ready=bool(regions) and all(r.location and r.phone for r in regions.values()),
         credentials_exist=config.GOOGLE_CREDENTIALS_FILE.exists(),
-        token_exists=config.GOOGLE_TOKEN_FILE.exists(),
+        google_login=google_login_status(),
         ollama=ollama_status(settings["ollama_model"]),
         model=settings["ollama_model"],
     )

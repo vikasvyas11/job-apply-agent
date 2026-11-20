@@ -1,6 +1,6 @@
 Your Full Name
 
-Your City | your.email@example.com | +00 0000 000000 | [LinkedIn](https://www.linkedin.com/in/yourprofile/) | [GitHub](https://github.com/yourusername) |
+{{LOCATION}} | your.email@example.com | {{PHONE}} | [LinkedIn](https://www.linkedin.com/in/yourprofile/) | [GitHub](https://github.com/yourusername) |
 
 PROFESSIONAL SUMMARY
 

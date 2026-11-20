@@ -1,10 +1,10 @@
 # Customising it
 
-Most changes need no code. Edit the files in `content/` (or the Setup page); they are re-read on every run.
+Most changes need no code. Edit the files in `content/<flow>/` (or the Setup page, Documents, then choose the flow); they are re-read on every run. Each flow (`data`, `growth`, `software`) has its own copy of the four files below, so the paths read `content/<flow>/...`.
 
 ## Change what the documents say and how they sound
 
-**`content/prompts.md`** holds the instructions sent to the model. It must contain three headings, on their own lines, exactly as written:
+**`content/<flow>/prompts.md`** holds the instructions sent to the model. It must contain three headings, on their own lines, exactly as written:
 
 ```
 Prompt for Resume:
@@ -19,11 +19,15 @@ Writing Style:
 - `Writing Style:` is appended to both requests; put your language variant (British/American English), banned phrases and tone rules there.
 - To prefer certain stories in cover letters, name them in the cover letter prompt and describe them in `project_notes.md`.
 
-**`content/resume.md`** is the source of truth. The tailored CV reproduces the ALL-CAPS section headings it finds there, in order, so adding a `PROJECTS` or `PUBLICATIONS` section is just a matter of adding it to this file.
+**`content/<flow>/resume.md`** is the source of truth. Its contact line uses `{{LOCATION}}` and `{{PHONE}}`, filled from the chosen region. The tailored CV reproduces the ALL-CAPS section headings it finds there, in order, so adding a `PROJECTS` or `PUBLICATIONS` section is just a matter of adding it to this file.
 
-**`content/project_notes.md`** is background the model may draw on but should never paste. One paragraph per role or project: the problem, what you did, the tools, the measurable outcome.
+**`content/<flow>/project_notes.md`** is background the model may draw on but should never paste. One paragraph per role or project: the problem, what you did, the tools, the measurable outcome.
 
-**`content/coverletter_reference.md`** fixes the shape of the letter (greeting, paragraph structure, sign-off). Write it once in a voice you like.
+**`content/<flow>/coverletter_reference.md`** fixes the shape of the letter (greeting, paragraph structure, sign-off). Write it once in a voice you like.
+
+## Add a flow or a region
+
+Regions live in `local_settings.json` under `regions` (edit them on the Setup page); add an entry and it appears in the Region dropdown. Flows are defined in `FLOWS` in `job_apply_agent/profiles.py`: add a key and label there, add `content.example/<key>/` with the four files, and the Setup page and Applications dropdown pick it up.
 
 ## Change the model
 

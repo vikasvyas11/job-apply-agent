@@ -20,12 +20,10 @@ OLLAMA_TIMEOUT_SECONDS = 600  # local generation on CPU/small GPU can be slow
 
 # --- Source-of-truth content files (edit via the Setup page, or these files
 # directly if you prefer a text editor; nothing is hardcoded elsewhere) ---
+# One folder per flow: content/<flow>/{resume,project_notes,coverletter_reference,prompts}.md
+# (see profiles.py). content.example/ has the same layout with placeholder text.
 CONTENT_DIR = PROJECT_ROOT / "content"
 CONTENT_TEMPLATE_DIR = PROJECT_ROOT / "content.example"
-CV_DUMP_FILE = CONTENT_DIR / "resume.md"
-COVER_LETTER_REFERENCE_FILE = CONTENT_DIR / "coverletter_reference.md"
-PROJECT_NOTES_FILE = CONTENT_DIR / "project_notes.md"
-PROMPTS_FILE = CONTENT_DIR / "prompts.md"
 
 # --- Google APIs ---
 GOOGLE_CREDENTIALS_FILE = PROJECT_ROOT / "credentials.json"  # OAuth client secret
@@ -72,11 +70,11 @@ def __getattr__(name: str) -> str:
 
 
 def ensure_content_files() -> None:
-    """Seed any missing content file from content.example/ so a fresh checkout
-    has something to edit on the Setup page instead of crashing on a missing
-    file. Existing files are never overwritten."""
-    CONTENT_DIR.mkdir(parents=True, exist_ok=True)
-    for template in CONTENT_TEMPLATE_DIR.glob("*.md"):
-        target = CONTENT_DIR / template.name
+    """Seed any missing content file from content.example/ (every flow folder)
+    so a fresh checkout has something to edit on the Setup page instead of
+    crashing on a missing file. Existing files are never overwritten."""
+    for template in CONTENT_TEMPLATE_DIR.rglob("*.md"):
+        target = CONTENT_DIR / template.relative_to(CONTENT_TEMPLATE_DIR)
         if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(template, target)

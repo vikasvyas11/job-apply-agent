@@ -17,12 +17,17 @@ RUNS_DIR = config.OUTPUT_DIR / "runs"
 CURRENT_RUN_MARKER = config.OUTPUT_DIR / "current_run.txt"
 
 
-def new_run(n_jobs: int) -> Path:
+def new_run(n_jobs: int, *, flow: str = "", region: str = "") -> Path:
+    """Start a run folder. flow and region record which profile the batch used,
+    so past runs can be labelled (older runs have neither)."""
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    write_status(run_dir, {"n_jobs": n_jobs, "completed": 0, "started_at": time.time(), "done": False})
+    write_status(run_dir, {
+        "n_jobs": n_jobs, "completed": 0, "started_at": time.time(), "done": False,
+        "flow": flow, "region": region,
+    })
     # Only the run id is stored (not an absolute path), so the project folder
     # can be moved or renamed without orphaning the "resume last run" marker.
     CURRENT_RUN_MARKER.write_text(run_id, encoding="utf-8")

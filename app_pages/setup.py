@@ -6,7 +6,7 @@ from pathlib import Path
 import requests
 import streamlit as st
 
-from job_apply_agent import config, docs_writer, local_settings, ui
+from job_apply_agent import config, docs_writer, local_settings, profiles, ui
 
 config.ensure_content_files()
 settings = local_settings.load()
@@ -41,45 +41,76 @@ with tab_profile:
         st.success("Saved.")
         st.rerun()
 
+    st.subheader("Contact details by region")
+    st.caption(
+        "Pick the region when you start a run. Its location and phone replace `{{LOCATION}}` and `{{PHONE}}` "
+        "in the CV's contact line. Cover letters never include your location or phone."
+    )
+    edited_regions = {}
+    for key, region in profiles.regions().items():
+        col_name, col_loc, col_phone = st.columns([0.8, 2, 2], vertical_alignment="center")
+        col_name.markdown(f"**{key}**")
+        location = col_loc.text_input(f"{key} location", value=region.location, key=f"region_loc_{key}",
+                                      placeholder="City")
+        phone = col_phone.text_input(f"{key} phone", value=region.phone, key=f"region_phone_{key}",
+                                     placeholder="Phone number")
+        edited_regions[key] = {"location": location.strip(), "phone": phone.strip()}
+    if st.button("Save contact details"):
+        local_settings.save({"regions": edited_regions})
+        st.success("Saved.")
+        st.rerun()
+
 # ------------------------------------------------------------------- Documents
 with tab_docs:
-    with st.expander("Your CV", expanded=True):
-        st.write(
-            "Paste your **full** CV: every role, every project, every skill, not a trimmed-down version. "
-            "The app selects and rewrites *from* this for each application, so more (accurate) detail means "
-            "better tailoring. Keep the structure: your name, a contact line, then ALL-CAPS section headings "
-            "such as PROFESSIONAL SUMMARY, WORK EXPERIENCE and EDUCATION. The tailored CV reproduces whichever "
-            "headings you use here, in this order."
-        )
-        _content_editor(config.CV_DUMP_FILE, label="CV content", height=420, key="cv_text", save_label="Save CV")
+    st.write(
+        "Each flow has its own CV, cover letter reference, project notes and prompts. A run uses one flow "
+        "only, so nothing from the other flows can end up in its documents."
+    )
+    flow = st.radio(
+        "Flow to edit", options=list(profiles.FLOWS), format_func=profiles.FLOWS.get,
+        horizontal=True, key="setup_flow",
+    )
+    folder = profiles.flow_dir(flow)
+    label = profiles.FLOWS[flow]
 
-    with st.expander("Cover letter style reference"):
+    with st.expander(f"{label} CV", expanded=True):
         st.write(
-            "Paste a cover letter written in the voice and structure you want. A real one you wrote before is "
-            "ideal. Only its structure and tone are used; its content is never copied."
+            "Paste your **full** CV for this flow: every role, project and skill that suits it. The app "
+            "selects and rewrites *from* this for each application. Keep the structure: your name, a contact "
+            "line using `{{LOCATION}}` and `{{PHONE}}`, then ALL-CAPS section headings such as PROFESSIONAL SUMMARY, "
+            "WORK EXPERIENCE and EDUCATION. The tailored CV keeps whichever headings you use, in this order."
+        )
+        _content_editor(folder / "resume.md", label="CV content", height=420, key=f"cv_text_{flow}",
+                        save_label="Save CV")
+
+    with st.expander(f"{label} cover letter style reference"):
+        st.write(
+            "A cover letter written in the voice and structure you want for this flow. Only its structure and "
+            "tone are used; its content is never copied."
         )
         _content_editor(
-            config.COVER_LETTER_REFERENCE_FILE, label="Cover letter reference", height=300,
-            key="cl_text", save_label="Save cover letter reference",
+            folder / "coverletter_reference.md", label="Cover letter reference", height=300,
+            key=f"cl_text_{flow}", save_label="Save cover letter reference",
         )
 
-    with st.expander("Project notes"):
+    with st.expander(f"{label} project notes"):
         st.write(
-            "The real story behind your CV bullets: what the problem was, what you built, what happened. "
+            "The real story behind this flow's CV bullets: what the problem was, what you did, what happened. "
             "It makes cover letters specific instead of generic, and is never printed word for word."
         )
         _content_editor(
-            config.PROJECT_NOTES_FILE, label="Project notes", height=320,
-            key="notes_text", save_label="Save project notes",
+            folder / "project_notes.md", label="Project notes", height=320,
+            key=f"notes_text_{flow}", save_label="Save project notes",
         )
 
-    with st.expander("Prompts"):
+    with st.expander(f"{label} prompts"):
         st.write(
-            "The instructions given to the AI for the CV and the cover letter. Change tone, priorities or "
-            "structure here. Keep the three headings `Prompt for Resume:`, `Prompt for Cover letter:` and "
-            "`Writing Style:` exactly as they are, because the app finds the sections by those names."
+            "The instructions given to the AI for this flow's CV and cover letter. Keep the three headings "
+            "`Prompt for Resume:`, `Prompt for Cover letter:` and `Writing Style:` exactly as they are, because "
+            "the app finds the sections by those names."
         )
-        _content_editor(config.PROMPTS_FILE, label="Prompts", height=420, key="prompts_text", save_label="Save prompts")
+        _content_editor(folder / "prompts.md", label="Prompts", height=420, key=f"prompts_text_{flow}",
+                        save_label="Save prompts")
 
 # -------------------------------------------------------------------- AI model
 with tab_model:
@@ -152,6 +183,7 @@ with tab_google:
                     st.error(f"Found tabs {tabs}, missing: {missing}. Add them in the Google Doc and try again.")
                 else:
                     st.success(f"Template looks good. Found tabs: {tabs}")
+                ui.google_login_status.clear()
             except Exception as exc:
                 st.error(f"Couldn't verify: {exc}")
 
@@ -163,6 +195,7 @@ with tab_google:
     if st.button("Connect Google account"):
         try:
             docs_writer.get_clients()
+            ui.google_login_status.clear()  # the sidebar re-checks the new login straight away
             st.success("Connected.")
         except Exception as exc:
             st.error(f"Couldn't connect: {exc}")

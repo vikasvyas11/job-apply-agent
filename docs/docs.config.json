@@ -1,0 +1,39 @@
+{
+  "product": "Job Application Agent",
+  "brand": "jobagent",
+  "tagline": "FIELD NOTES",
+  "icon": null,
+  "homeTitle": "Applications, in order",
+  "homeLead": "Everything behind the Job Application Agent: how to use it, how it works, how to make it yours, and a way to find any file.",
+  "footer": "Drafts, not autopilot.",
+  "guides": [
+    {
+      "title": "User guide",
+      "source": "docs/guide-content.html",
+      "page": "guide.html",
+      "eyebrow": "START HERE ↗",
+      "summary": "Flows, regions, setup and your first batch of applications."
+    },
+    {
+      "title": "How it works",
+      "source": "docs/how-it-works-content.html",
+      "page": "how-it-works.html",
+      "eyebrow": "UNDER THE HOOD ↗",
+      "summary": "The pipeline, flow isolation, document formatting and the safety checks."
+    },
+    {
+      "title": "Customising",
+      "source": "docs/customising-content.html",
+      "page": "customising.html",
+      "eyebrow": "MAKE IT YOURS ↗",
+      "summary": "Content files per flow, prompts, regions, the CV layout and the look."
+    },
+    {
+      "title": "Implementation guide",
+      "source": "docs/implementation-content.html",
+      "page": "implementation.html",
+      "eyebrow": "FOR DEVELOPERS ↗",
+      "summary": "Code map, tests, status and a dated change log."
+    }
+  ]
+}

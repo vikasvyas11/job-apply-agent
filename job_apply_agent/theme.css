@@ -235,3 +235,7 @@ h1, h2, h3, h4 { font-family: var(--display); letter-spacing: -0.01em; color: va
   .meter-running .meter-fill { animation: none; }
   * { transition: none !important; }
 }
+
+/* run profile chip above the meter (flow, region) */
+.run-profile { margin: 0 0 0.6rem; }
+

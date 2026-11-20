@@ -6,8 +6,7 @@ next run picks up the change automatically.
 """
 import re
 from dataclasses import dataclass
-
-from job_apply_agent import config
+from pathlib import Path
 
 _SECTION_HEADS = {
     "resume": re.compile(r"^\s*Prompt for Resume:\s*$", re.IGNORECASE | re.MULTILINE),
@@ -38,8 +37,9 @@ def _find_all_heads(text: str) -> list[tuple[str, int, int]]:
     return hits
 
 
-def load_prompts() -> Prompts:
-    text = config.PROMPTS_FILE.read_text(encoding="utf-8")
+def load_prompts(path: Path) -> Prompts:
+    """Parse one flow's prompts.md (each flow has its own; see profiles.py)."""
+    text = path.read_text(encoding="utf-8")
     heads = _find_all_heads(text)
 
     sections: dict[str, str] = {}

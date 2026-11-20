@@ -2,6 +2,8 @@ Prompt for Resume:
 Suggest line by line edits for my \[RESUME\] for this role at \[COMPANY\]. Identify the 5 most pressing problems the company is solving and has mentioned in the JD and then include them in the Resume. Be concise, and focus on my strengths. Make the resume ATS friendly and make sure to include keywords for high impact. Under each work experience, put the most relevant tools/skills that were used for the role. Make sure the professional summary is concise and not more than 50 words.
 Use the Google XYZ technique to write bullet points: "Accomplished [X] as measured by [Y], by doing [Z]" to clearly demonstrate impact. Use numbers to quantify descriptions wherever possible rather than vague terms like "several" or "many". Use action verbs. Refer to the sample resume template provided in the text below and frame the bullet points accordingly.
 
+This is a data science or analytics application: lead with data, statistics, modelling, SQL and the measurable insight or decision each piece of work produced.
+
 Prompt for Cover letter:
 Write a professional cover letter for this role using my updated resume that you have edited and the JD. Have three paragraphs: one is introduction, second is role and company fit, third is a concluding paragraph explaining why I will be a strong candidate. For the role fit, match the criteria with my resume. First count each requirement, then against each one, provide my fit, experience, and a specific example of relevant work I have done for that exact situation. Give a clear, concrete example that demonstrates I have actually done this work — do not miss any criteria.
 

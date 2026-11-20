@@ -13,7 +13,8 @@ job-apply-agent/
 ├── job_apply_agent/          # the Python package (all logic lives here)
 │   ├── config.py             # paths, Google scopes; user settings are read live from local_settings.json
 │   ├── local_settings.py     # load/save local_settings.json (name, template doc ID, model, Drive folder)
-│   ├── prompt_loader.py      # parses content/prompts.md into named sections at runtime
+│   ├── profiles.py           # flows (data, growth, software) and regions; which content folder a run reads
+│   ├── prompt_loader.py      # parses a flow's prompts.md into named sections at runtime
 │   ├── jd_extractor.py       # fetches + cleans job description text from a URL (or accepts pasted text)
 │   ├── browser_fetch.py      # headless-browser (Playwright) fallback for JS-only job pages
 │   ├── company_research.py   # free DuckDuckGo search + scrape for company background (best-effort)
@@ -26,10 +27,11 @@ job-apply-agent/
 │   ├── cli.py / __main__.py  # command-line alternative to the UI: python -m job_apply_agent
 │   └── setup_template.py     # one-time helper: verifies the template doc's tabs and saves its ID
 ├── content/                  # YOUR files (git-ignored): the LLM reads these fresh on every run
-│   ├── resume.md             # your full CV, the source of truth the LLM tailors from
-│   ├── coverletter_reference.md  # a past cover letter, style/structure reference only
-│   ├── project_notes.md      # detailed per-role / per-project background, mined for narrative, never printed verbatim
-│   └── prompts.md            # the instructions sent to the LLM, edit this to change behaviour
+│   └── data/ growth/ software/   # one folder per flow, each with:
+│       ├── resume.md             # that flow's full CV; contact line uses {{LOCATION}} and {{PHONE}}
+│       ├── coverletter_reference.md  # a letter in the voice/structure wanted, style reference only
+│       ├── project_notes.md      # detailed background per role/project, mined for narrative, never printed verbatim
+│       └── prompts.md            # the instructions sent to the LLM for this flow
 ├── content.example/          # placeholder versions of the four files above, copied in on first run
 ├── tests/                    # pytest suite (no network, no Ollama, no Google)
 ├── docs/                     # SETUP.md, CODEBASE.md (this file), PROJECT_EXPLAINER.md
@@ -81,8 +83,11 @@ Every path and API setting lives here; nothing is hardcoded elsewhere. Fixed val
 - `GOOGLE_SCOPES` must include full `drive` (not `drive.file`), because the template doc was created outside this app; `drive.file` would only grant access to files the app itself created.
 - `local_settings.py` is the tiny JSON load/save layer behind the Setup page; a missing or corrupt file falls back to defaults.
 
+### `profiles.py`
+Defines the three flows (`data`, `growth`, `software`, with UI labels) and reads regions from `local_settings.json`. A `Profile(flow, region)` is created once per run and passed through `pipeline.run_batch` → `run_job` → `llm`; it is the only way content is located (`profile.resume_file`, `.project_notes_file`, `.cover_letter_reference_file`, `.prompts_file`), so a run cannot read another flow's files. `profile.render(text)` fills `{{LOCATION}}` and `{{PHONE}}` from the region, dropping a placeholder and its `|` separator when the value is empty.
+
 ### `prompt_loader.py`
-Splits `content/prompts.md` into three named sections (`resume`, `cover_letter`, `writing_style`) by regex-matching its headings (`Prompt for Resume:`, `Prompt for Cover letter:`, `Writing Style:`). Raises a clear error if a heading is missing or renamed — so if you ever restructure `prompts.md`'s headings, either keep the exact wording or update the regexes in `_SECTION_HEADS`.
+Splits a flow's `prompts.md` (passed in as a path) into three named sections (`resume`, `cover_letter`, `writing_style`) by regex-matching its headings (`Prompt for Resume:`, `Prompt for Cover letter:`, `Writing Style:`). Raises a clear error if a heading is missing or renamed — so if you ever restructure `prompts.md`'s headings, either keep the exact wording or update the regexes in `_SECTION_HEADS`.
 
 ### `jd_extractor.py`
 `get_jd(url_or_text, pasted_fallback)` is the entry point. If the input isn't a URL, it's treated as pasted JD text directly. If it is a URL:
@@ -103,7 +108,8 @@ The core of the pipeline. Responsibilities:
 - **`extract_job_meta(jd_text, company_override)`** — a cheap, short LLM call that pulls `{"company": ..., "job_title": ...}` out of raw JD text, used to name the generated doc. Never raises; falls back to `"Unknown Company"` / `"Role"` if Ollama is unreachable or the response is unparsable.
 - **`build_cv_prompt` / `build_cover_letter_prompt`** — assemble the full prompt sent to the model: the relevant section of `prompts.md`, the Writing Style section, the JD, company research, your CV dump / project notes, and a hard **STRUCTURE** block. That STRUCTURE block is what enforces the parseable markdown convention (`**Title** | Org | Dates` for entries, `* ` for bullets, plain ALL CAPS headings) that `cv_formatter.py` depends on, and explicitly scopes each call to *only* produce the one document (this exists because the model was observed bleeding a cover letter into the CV response when the shared Writing Style instructions were ambiguous about it).
 - **`_enforce_real_contact_header(tailored_cv)`** — after generation, force-replaces everything before the `PROFESSIONAL SUMMARY` heading with the real name/contact line read directly from `content/resume.md`. This exists because the model was observed inventing a plausible-but-wrong phone number/location even when explicitly told not to — for anything factual like this, don't trust the model, enforce it in code.
-- **`cv_section_headings(cv_dump)`**: reads the ALL-CAPS section headings out of `content/resume.md`, in order, and the CV prompt tells the model to reproduce exactly those. Adding a section to your CV (for example PROJECTS) is therefore all it takes for the tailored CV to keep it; no code or prompt edit needed.
+- **`cv_section_headings(cv_dump)`**: reads the ALL-CAPS section headings out of the flow's `resume.md`, in order, and the CV prompt tells the model to reproduce exactly those. Adding a section to your CV (for example PROJECTS) is therefore all it takes for the tailored CV to keep it; no code or prompt edit needed.
+- **`drop_invented_entries(tailored_cv, master_cv)`**: after generation, removes any job, project or education entry whose title (or, for a reworded title, organisation) is not in the flow's master CV, with its bullets, and gives every kept title the master CV's casing. Added after a real run invented a "v1" of a project and promoted background notes into a new entry.
 - **`generate_cv` / `generate_cover_letter`** — the public entry points `pipeline.py` calls. Each retries generation (up to 2-3 attempts) if the output looks contaminated with the *other* document's markers (`_COVER_LETTER_MARKERS`, `_CV_SECTION_MARKERS`), and the cover letter additionally does a soft retry if it contains an obvious AI-cliche phrase from `_BANNED_PHRASES` (falls back to the best contamination-free attempt if none come back fully clean).
 
 ### `cv_formatter.py`
@@ -140,10 +146,10 @@ One-time helper: `python -m job_apply_agent.setup_template <DOC_ID>` confirms th
 ## How to make common changes
 
 **Change how the CV/cover letter are written (tone, priorities, what to emphasize)**
-→ Edit `content/prompts.md`. No code changes, no restart needed — every generation call re-reads it fresh. Keep the three headings (`Prompt for Resume:`, `Prompt for Cover letter:`, `Writing Style:`) exactly as they are, since `prompt_loader.py` matches on them.
+→ Edit the flow's `content/<flow>/prompts.md`. No code changes, no restart needed — every generation call re-reads it fresh. Keep the three headings (`Prompt for Resume:`, `Prompt for Cover letter:`, `Writing Style:`) exactly as they are, since `prompt_loader.py` matches on them.
 
 **Update your actual experience**
-→ Edit `content/resume.md` (keep it as the full superset of experience — the model selects *from* it, it doesn't need to already be trimmed) and/or `content/project_notes.md` (richer narrative detail, mined for cover-letter storytelling, never printed verbatim).
+→ Edit the flow's `content/<flow>/resume.md` (keep it as the full superset of experience — the model selects *from* it, it doesn't need to already be trimmed) and/or `content/project_notes.md` (richer narrative detail, mined for cover-letter storytelling, never printed verbatim).
 
 **Change the LLM model**
 → the Setup page (stored in `local_settings.json`). Pull it first (`ollama pull <name>`). If it's not a thinking/reasoning model, the `"think": False` flag in `llm._call_ollama` is a no-op (harmless either way).

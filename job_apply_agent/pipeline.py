@@ -1,11 +1,15 @@
 """Orchestrates one job application end to end, and loops over a batch (e.g.
 the up-to-10 links you paste into Streamlit or the CLI in one go).
+
+Every job in a batch uses the same Profile (one flow, one region): the content
+of the other flows is never read during that batch.
 """
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from job_apply_agent import company_research, docs_writer, jd_extractor, llm
+from job_apply_agent.profiles import Profile
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +35,11 @@ class JobResult:
     log: list[str] = field(default_factory=list)
 
 
-def run_job(job: JobInput, *, google_clients: docs_writer.GoogleClients | None = None) -> JobResult:
+def run_job(
+    job: JobInput, *, profile: Profile, google_clients: docs_writer.GoogleClients | None = None
+) -> JobResult:
     result = JobResult(job=job, ok=False)
+    result.log.append(f"Flow: {profile.flow_label}, region: {profile.region}")
 
     jd = jd_extractor.get_jd(job.url_or_text, pasted_fallback=job.pasted_jd_fallback)
     result.jd_source = jd.source
@@ -52,12 +59,15 @@ def run_job(job: JobInput, *, google_clients: docs_writer.GoogleClients | None =
     result.log.append(f"Company research: {len(research.passages)} passage(s) gathered")
 
     try:
-        tailored_cv = llm.generate_cv(company=company, jd_text=jd.text, research_block=research_block)
+        tailored_cv = llm.generate_cv(
+            profile=profile, company=company, jd_text=jd.text, research_block=research_block
+        )
         result.tailored_cv = tailored_cv
         result.log.append("Tailored CV generated")
 
         cover_letter = llm.generate_cover_letter(
-            company=company, jd_text=jd.text, research_block=research_block, tailored_cv=tailored_cv,
+            profile=profile, company=company, jd_text=jd.text, research_block=research_block,
+            tailored_cv=tailored_cv,
         )
         result.cover_letter = cover_letter
         result.log.append("Cover letter generated")
@@ -66,7 +76,7 @@ def run_job(job: JobInput, *, google_clients: docs_writer.GoogleClients | None =
         return result
 
     try:
-        clients = google_clients or docs_writer.get_clients()
+        clients = google_clients or docs_writer.get_clients(interactive=False)
         result.doc_url = docs_writer.create_application_doc(
             clients,
             company=company,
@@ -85,7 +95,7 @@ def run_job(job: JobInput, *, google_clients: docs_writer.GoogleClients | None =
 
 
 def run_batch(
-    jobs: list[JobInput], on_result: Callable[[int, JobResult], None] | None = None
+    jobs: list[JobInput], *, profile: Profile, on_result: Callable[[int, JobResult], None] | None = None
 ) -> list[JobResult]:
     """Runs jobs sequentially (Ollama is a single local model, so
     parallelising generation wouldn't be faster) and authenticates with Google
@@ -100,14 +110,14 @@ def run_batch(
     results: list[JobResult] = []
     google_clients = None
     try:
-        google_clients = docs_writer.get_clients()
+        google_clients = docs_writer.get_clients(interactive=False)
     except Exception as exc:
         # Each job retries the connection and reports its own error if it recurs.
         log.warning("Could not authenticate with Google up front: %s", exc)
 
     for idx, job in enumerate(jobs):
         try:
-            result = run_job(job, google_clients=google_clients)
+            result = run_job(job, profile=profile, google_clients=google_clients)
         except Exception as exc:
             log.exception("Unexpected failure in job %d (%s)", idx, job.url_or_text)
             result = JobResult(job=job, ok=False, error=f"Unexpected error: {exc}")

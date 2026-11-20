@@ -18,6 +18,9 @@ _ENTRY_RE = re.compile(r"^\*\*(.+?)\*\*\s*(.*)$")
 _BULLET_RE = re.compile(r"^[*-]\s+(.*)$")
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MD_ESCAPE_RE = re.compile(r"\\([-+#_.!*])")
+# "Tools/Skills: Python, SQL" (optionally written as a bullet): its own line kind,
+# with the label in bold, so it reads as a footer to the entry rather than a duty.
+_SKILLS_RE = re.compile(r"^(?:[*-]\s+)?(Tools\s*/\s*Skills\s*:)\s*(.*)$", re.IGNORECASE)
 
 
 def _unescape_md(text: str) -> str:
@@ -30,7 +33,7 @@ def _unescape_md(text: str) -> str:
 @dataclass
 class LineSpec:
     text: str
-    kind: str  # "name" | "contact" | "heading" | "entry" | "bullet" | "normal" | "blank"
+    kind: str  # "name" | "contact" | "heading" | "entry" | "bullet" | "skills" | "normal" | "blank"
     bold_len: int = 0
     links: list[tuple[int, int, str]] = field(default_factory=list)  # (start, end, url) local to this line
 
@@ -51,6 +54,28 @@ def _strip_md_links(text: str) -> tuple[str, list[tuple[int, int, str]]]:
     return "".join(out), links
 
 
+_SMALL_WORDS = {"and", "of", "at", "for", "the", "in", "on", "to", "a", "an", "&"}
+
+
+def _title_case_if_shouting(title: str) -> str:
+    """"DATA SCIENCE INTERN" -> "Data Science Intern". Models sometimes capitalise
+    entry titles despite the prompt. Short all-caps words (AI, UCL, V2) are kept;
+    titles that already contain lower case are left exactly as written."""
+    letters = [c for c in title if c.isalpha()]
+    if len(letters) < 4 or any(c.islower() for c in letters):
+        return title
+    words = []
+    for i, word in enumerate(title.split(" ")):
+        bare = word.strip(",.()").lower()
+        if i > 0 and bare in _SMALL_WORDS:
+            words.append(word.lower())
+        elif len(bare) <= 3:
+            words.append(word)  # likely an acronym or version: AI, UCL, V2, LLM
+        else:
+            words.append(word[:1].upper() + word[1:].lower())
+    return " ".join(words)
+
+
 def _is_section_heading(candidate: str) -> bool:
     if not candidate or len(candidate) > 60:
         return False
@@ -69,7 +94,9 @@ def parse_cv(raw_text: str) -> list[LineSpec]:
     for raw_line in raw_text.splitlines():
         line = raw_line.strip()
         if not line:
-            specs.append(LineSpec(text="", kind="blank"))
+            # Blank lines are dropped: an empty paragraph would take the template's
+            # default size and spacing and give uneven gaps. Spacing between
+            # entries and sections comes only from _SPACING_PT below.
             continue
 
         if not seen_name:
@@ -86,11 +113,16 @@ def parse_cv(raw_text: str) -> list[LineSpec]:
         heading_candidate = line.lstrip("#").strip().replace("**", "").strip()
         entry_match = _ENTRY_RE.match(line)
         bullet_match = _BULLET_RE.match(line)
+        skills_match = _SKILLS_RE.match(line.replace("**", ""))
 
-        if _is_section_heading(heading_candidate):
+        if skills_match:
+            label = "Tools/Skills:"
+            rest = _unescape_md(skills_match.group(2).strip())
+            specs.append(LineSpec(text=f"{label} {rest}".strip(), kind="skills", bold_len=len(label)))
+        elif _is_section_heading(heading_candidate):
             specs.append(LineSpec(text=_unescape_md(heading_candidate), kind="heading"))
         elif entry_match and "|" in entry_match.group(2):
-            bold_part = _unescape_md(entry_match.group(1).strip().rstrip("|").strip())
+            bold_part = _title_case_if_shouting(_unescape_md(entry_match.group(1).strip().rstrip("|").strip()))
             rest = _unescape_md(entry_match.group(2).strip().replace("**", "").lstrip("|").strip())
             full_text = f"{bold_part} | {rest}" if rest else bold_part
             specs.append(LineSpec(text=full_text, kind="entry", bold_len=len(bold_part)))
@@ -99,7 +131,7 @@ def parse_cv(raw_text: str) -> list[LineSpec]:
             # (sampling variance) — fall back to bolding whatever comes
             # before the first "|" so the title still stands out visually.
             title_part, _, rest_part = line.partition("|")
-            title_part = _unescape_md(title_part.replace("**", "").strip())
+            title_part = _title_case_if_shouting(_unescape_md(title_part.replace("**", "").strip()))
             rest_part = _unescape_md(rest_part.replace("**", "").strip())
             full_text = f"{title_part} | {rest_part}"
             specs.append(LineSpec(text=full_text, kind="entry", bold_len=len(title_part)))
@@ -110,7 +142,25 @@ def parse_cv(raw_text: str) -> list[LineSpec]:
             text, links = _strip_md_links(_unescape_md(line.replace("**", "").lstrip("#").strip()))
             specs.append(LineSpec(text=text, kind="normal", links=links))
 
-    return _drop_blank_lines_before_headings(specs)
+    return _drop_blank_lines_before_headings(_lines_under_entries_are_bullets(specs))
+
+
+def _lines_under_entries_are_bullets(specs: list[LineSpec]) -> list[LineSpec]:
+    """Models sometimes drop the "* " markers and write each duty as a plain line.
+    A plain line that sits under a job/project entry (before the next entry or
+    section heading) is a duty, so it becomes a bullet. Lines in a section with no
+    entry above them, like the summary or a skills list, are left as they are."""
+    out: list[LineSpec] = []
+    under_entry = False
+    for spec in specs:
+        if spec.kind == "entry":
+            under_entry = True
+        elif spec.kind == "heading":
+            under_entry = False
+        elif spec.kind == "normal" and under_entry:
+            spec = LineSpec(text=spec.text, kind="bullet", links=spec.links)
+        out.append(spec)
+    return out
 
 
 def _drop_blank_lines_before_headings(specs: list[LineSpec]) -> list[LineSpec]:
@@ -144,24 +194,32 @@ _FONT_SIZE_PT = {
     "heading": 11.5,
     "entry": 10.5,
     "bullet": 10.5,
+    "skills": 9.5,
     "normal": 10.5,
 }
 _BOLD_WHOLE_LINE = {"name", "heading"}
-# (spaceAbove, spaceBelow) in points, applied to the whole paragraph.
-# Headings get a visibly larger gap above them than any other spacing here —
-# that's deliberate breathing room between sections, not the same thing as
-# the blank-line-before-a-heading that gets stripped in parse_cv (that was
-# always dead space that ate into the two-page budget for nothing; this is
-# controlled, so it's kept small enough elsewhere to still fit two pages).
+# (spaceAbove, spaceBelow) in points, applied to the whole paragraph. This is
+# the only vertical spacing in the CV: blank lines are dropped in parse_cv, so
+# the gaps are identical however the model laid out its text. A section heading
+# gets the largest gap above it; an entry a small one, separating roles; bullets
+# and the skills line sit tight under their entry.
 _SPACING_PT = {
     "name": (0, 2),
-    "contact": (0, 6),
-    "heading": (14, 3),
-    "entry": (4, 0),
-    "bullet": (0, 0),
-    "normal": (0, 3),
+    "contact": (0, 4),
+    "heading": (12, 3),
+    "entry": (6, 1),
+    "bullet": (0, 1),
+    "skills": (1, 0),
+    "normal": (0, 2),
     "blank": (0, 0),
 }
+# Every paragraph gets single line spacing explicitly, so the template's own
+# default (often 1.15) can't make one generated CV taller than another.
+_LINE_SPACING_PCT = 100
+# Bullet glyph and text indents, in points. Google's preset defaults (18/36)
+# waste width on a two-page CV.
+_BULLET_INDENT_FIRST_LINE_PT = 6
+_BULLET_INDENT_START_PT = 18
 
 
 def build_tab_content(tab_id: str, base_index: int, specs: list[LineSpec]) -> tuple[str, list[dict]]:
@@ -179,7 +237,7 @@ def build_tab_content(tab_id: str, base_index: int, specs: list[LineSpec]) -> tu
         start, end = cursor, cursor + len(spec.text)
 
         if spec.kind != "bullet" and bullet_run_start is not None:
-            requests.append(_bullet_request(tab_id, bullet_run_start, bullet_run_end))
+            requests.extend(_bullet_request(tab_id, bullet_run_start, bullet_run_end))
             bullet_run_start = bullet_run_end = None
 
         if spec.kind == "blank":
@@ -192,8 +250,9 @@ def build_tab_content(tab_id: str, base_index: int, specs: list[LineSpec]) -> tu
             "namedStyleType": "NORMAL_TEXT",
             "spaceAbove": {"magnitude": space_above, "unit": "PT"},
             "spaceBelow": {"magnitude": space_below, "unit": "PT"},
+            "lineSpacing": _LINE_SPACING_PCT,
         }
-        fields = ["namedStyleType", "spaceAbove", "spaceBelow"]
+        fields = ["namedStyleType", "spaceAbove", "spaceBelow", "lineSpacing"]
         if spec.kind in _ALIGNMENT:
             paragraph_style["alignment"] = _ALIGNMENT[spec.kind]
             fields.append("alignment")
@@ -221,7 +280,7 @@ def build_tab_content(tab_id: str, base_index: int, specs: list[LineSpec]) -> tu
                 }
             )
 
-        if spec.kind == "entry" and spec.bold_len > 0:
+        if spec.kind in ("entry", "skills") and spec.bold_len > 0:
             requests.append(
                 {
                     "updateTextStyle": {
@@ -255,15 +314,24 @@ def build_tab_content(tab_id: str, base_index: int, specs: list[LineSpec]) -> tu
         cursor = end + 1
 
     if bullet_run_start is not None:
-        requests.append(_bullet_request(tab_id, bullet_run_start, bullet_run_end))
+        requests.extend(_bullet_request(tab_id, bullet_run_start, bullet_run_end))
 
     return full_text, requests
 
 
-def _bullet_request(tab_id: str, start: int, end: int) -> dict:
-    return {
-        "createParagraphBullets": {
-            "range": {"tabId": tab_id, "startIndex": start, "endIndex": end},
-            "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE",
-        }
-    }
+def _bullet_request(tab_id: str, start: int, end: int) -> list[dict]:
+    """A bullet list over [start, end), then tighter indents than the preset's."""
+    rng = {"tabId": tab_id, "startIndex": start, "endIndex": end}
+    return [
+        {"createParagraphBullets": {"range": rng, "bulletPreset": "BULLET_DISC_CIRCLE_SQUARE"}},
+        {
+            "updateParagraphStyle": {
+                "range": rng,
+                "paragraphStyle": {
+                    "indentFirstLine": {"magnitude": _BULLET_INDENT_FIRST_LINE_PT, "unit": "PT"},
+                    "indentStart": {"magnitude": _BULLET_INDENT_START_PT, "unit": "PT"},
+                },
+                "fields": "indentFirstLine,indentStart",
+            }
+        },
+    ]

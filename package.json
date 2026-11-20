@@ -1,0 +1,14 @@
+{
+  "name": "job-apply-agent-docs",
+  "private": true,
+  "type": "module",
+  "description": "Builds and checks the HTML documentation in docs/site. The app itself is Python.",
+  "scripts": {
+    "docs:build": "node scripts/build-docs.mjs",
+    "docs:test": "npm run docs:build && node scripts/test-docs.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "marked": "^17.0.0"
+  }
+}

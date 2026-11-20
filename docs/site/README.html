@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>README · Job Application Agent</title><link rel="stylesheet" href="./style.css"></head><body><header><a class="brand" href="./index.html"><b>J</b> jobagent<span>.</span> <small>FIELD NOTES</small></a><div class="controls"><button id="left-toggle" aria-controls="left" aria-expanded="true">☰ <span>Documents</span></button><button id="right-toggle" aria-controls="right" aria-expanded="true">⌕ <span>Find files</span></button></div></header><div class="layout" id="layout"><aside id="left"><p class="eyebrow">THE LIBRARY</p><h2>On this project<span>.</span></h2><nav><a href="./index.html">Overview</a><a href="./guide.html">User guide</a><a href="./how-it-works.html">How it works</a><a href="./customising.html">Customising</a><a href="./implementation.html">Implementation guide</a><a href="./CONTRIBUTING.html">CONTRIBUTING</a><a href="./README.html" aria-current="page">README</a><a href="./docs/CODEBASE.html">docs / CODEBASE</a><a href="./docs/CUSTOMISING.html">docs / CUSTOMISING</a><a href="./docs/DESIGN.html">docs / DESIGN</a><a href="./docs/GETTING_STARTED.html">docs / GETTING_STARTED</a></nav><p class="small">Made for curious minds.<br>Available offline.</p></aside><main><div class="content"><p class="eyebrow">JOB APPLICATION AGENT / DOCUMENTATION</p><h1>Job Application Agent</h1>
+<p>Paste a job link. Get back a <strong>tailored CV and cover letter</strong>, written into a formatted Google Doc, using an AI model that runs <strong>on your own computer</strong>. No subscriptions, no API keys, and your CV never goes to an AI company.</p>
+<p>It fetches the job description, researches the company, rewrites your CV from a master copy you maintain, writes a cover letter in your voice, and files both into a copy of a Google Doc template (one tab each). Paste up to 10 links and leave it running.</p>
+<blockquote>
+<p>This is a drafting tool, not an autopilot. It selects and rewrites what is in <em>your</em> CV; it should never invent experience, but always read both documents before you send anything.</p>
+</blockquote>
+<h2>How it works</h2>
+<pre><code> job URL(s) ──► fetch job description        (requests + trafilatura, headless-browser fallback)
+                     │
+                     ├──► company research     (DuckDuckGo search + page scrape, no API key)
+                     ▼
+              local LLM via Ollama ──► tailored CV  ──► cover letter
+                     │
+                     ▼
+        Google Docs / Drive API ──► copy of your template doc, &quot;CV&quot; and &quot;Cover Letter&quot; tabs filled in
+</code></pre>
+<p>Highlights:</p>
+<ul>
+<li><strong>Local and free.</strong> Generation uses <a href="https://ollama.com">Ollama</a>; the only external calls are fetching the posting, a web search for company background, and writing to <em>your own</em> Google Drive.</li>
+<li><strong>Your CV is the source of truth.</strong> The model tailors from <code>content/resume.md</code>; contact details are copied from it in code, not trusted to the model.</li>
+<li><strong>Real document formatting.</strong> Headings, bold titles, bullets, hyperlinks, margins and spacing are applied through the Docs API so the CV is two pages, not a text dump.</li>
+<li><strong>Guard rails around a small local model.</strong> Context size is sized to the prompt, output length is validated, a CV that has a cover letter bleeding into it is rejected and retried, and common AI-cliche phrases trigger a redraft.</li>
+<li><strong>Survives a closed tab.</strong> Work runs in a background thread and every result is saved to disk as it finishes.</li>
+<li><strong>Everything is editable without touching code:</strong> a built-in Setup page for your name, CV, prompts, model and Google template.</li>
+</ul>
+<h2>Requirements</h2>
+<ul>
+<li>Windows, macOS or Linux</li>
+<li>Python 3.11 or newer</li>
+<li><a href="https://ollama.com/download">Ollama</a> and a model pulled into it (a few GB of disk, and enough RAM for the model you choose)</li>
+<li>A Google account and a free Google Cloud project (for the Docs and Drive APIs; about 10 minutes, once)</li>
+</ul>
+<h2>Quick start</h2>
+<p>On this page, click the green <strong>Code</strong> button and copy the HTTPS link (or choose <strong>Download ZIP</strong> and unzip it). Then, in a terminal:</p>
+<pre><code class="language-bash">git clone &lt;the link you copied&gt;
+cd job-apply-agent
+</code></pre>
+<p><strong>Windows:</strong> double-click <code>setup.bat</code>, then <code>start.bat</code>.
+<strong>macOS / Linux:</strong> <code>./setup.sh</code>, then <code>./start.sh</code>.</p>
+<p>Then, in the browser tab that opens, work down the <strong>Setup</strong> page: your name, your CV, a cover letter you like, your Google Doc template, and a Google login. The first two Google steps (an OAuth client file and the template document) are described step by step in <strong><a href="docs/GETTING_STARTED.html">docs/GETTING_STARTED.md</a></strong>; that guide also has a troubleshooting table.</p>
+<p>When Setup shows green, go back to the main page, paste a job link and press <strong>Generate all</strong>. A job takes a few minutes on typical laptop hardware.</p>
+<p>Prefer the command line? <code>python -m job_apply_agent --job-url &quot;https://...&quot;</code> (see <code>--help</code>).</p>
+<h2>Make it yours</h2>
+<p>Each run uses one <strong>flow</strong> and one <strong>region</strong>, chosen at the top of the Applications page:</p>
+<ul>
+<li><strong>Flow</strong>: <em>Data Science</em>, <em>Growth</em> or <em>Software Dev</em>. Each flow has its own master CV, project notes, cover letter reference and prompts, so you can present the same career three different ways. A run never reads the other flows&#39; files.</li>
+<li><strong>Region</strong>: <em>UK</em> or <em>India</em> by default (add your own). It fills the city and phone on the CV&#39;s contact line; cover letters never include them.</li>
+</ul>
+<p>Everything personal lives in plain-text files in <code>content/&lt;flow&gt;/</code> (<code>data</code>, <code>growth</code>, <code>software</code>), which is git-ignored so you can never publish it by accident. The first run copies placeholder versions from <code>content.example/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>File (per flow)</th>
+<th>What goes in it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>resume.md</code></td>
+<td>Your complete CV for this kind of role. The model selects from it. The contact line uses <code>{{LOCATION}}</code> and <code>{{PHONE}}</code>.</td>
+</tr>
+<tr>
+<td><code>coverletter_reference.md</code></td>
+<td>One cover letter in the voice you want, used for tone and structure only</td>
+</tr>
+<tr>
+<td><code>project_notes.md</code></td>
+<td>The real story behind your CV bullets: problem, what you built, outcome</td>
+</tr>
+<tr>
+<td><code>prompts.md</code></td>
+<td>The instructions given to the model, and your writing-style rules</td>
+</tr>
+</tbody></table>
+<p>Open <strong><code>Documentation.html</code></strong> for the full illustrated guide.</p>
+<p>See <strong><a href="docs/CUSTOMISING.html">docs/CUSTOMISING.md</a></strong> for how to shape the output, change the model, adjust the CV layout, or send the result somewhere other than Google Docs.</p>
+<h2>Privacy and security</h2>
+<ul>
+<li>Your CV and the jobs you apply to stay on your machine. Nothing is sent to an AI provider.</li>
+<li><code>credentials.json</code> (your Google OAuth client), <code>token.json</code> (your login), <code>local_settings.json</code>, <code>content/</code> and <code>output/</code> are all in <code>.gitignore</code>. <strong>Never commit or share them.</strong> If you ever do, revoke the OAuth client in the Google Cloud console and delete <code>token.json</code>.</li>
+<li>The app asks for the <code>drive</code> scope because it must copy a template document you created outside the app (the narrower <code>drive.file</code> scope cannot see it). It only touches the template and the copies it makes.</li>
+<li>Keep your OAuth consent screen on &quot;Testing&quot; with only yourself as a test user. Google expires test-mode logins after 7 days; reconnect from the Setup page when asked.</li>
+</ul>
+<h2>Use it responsibly</h2>
+<ul>
+<li>Review everything before sending. Small local models can still phrase things badly or overstate.</li>
+<li>Only apply to roles you genuinely qualify for; the tool tailors your real experience, it does not create it.</li>
+<li>Be considerate when fetching pages: it makes one request per posting plus a handful of searches. Some sites forbid automated access; where a fetch fails, paste the description instead.</li>
+</ul>
+<h2>Project layout</h2>
+<pre><code>streamlit_app.py     the web UI           app_pages/          Applications and Setup pages
+job_apply_agent/     the package          tests/              pytest suite (no network needed)
+content.example/     placeholder inputs   docs/               guides and technical reference
+</code></pre>
+<p>Technical reference: <a href="docs/CODEBASE.html">docs/CODEBASE.md</a>. Why it is built the way it is: <a href="docs/DESIGN.html">docs/DESIGN.md</a>.</p>
+<h2>Development</h2>
+<pre><code class="language-bash">pip install -r requirements-dev.txt
+pytest          # ~70 tests, about a second, no Ollama or Google needed
+ruff check .
+</code></pre>
+<p>Contributions are welcome; see <a href="CONTRIBUTING.html">CONTRIBUTING.md</a>.</p>
+<h2>License</h2>
+<p>MIT. See <a href="LICENSE">LICENSE</a>.</p>
+</div><footer>Job Application Agent <span>✳</span> Drafts, not autopilot.</footer></main><aside id="right"><p class="eyebrow">THE REPOSITORY</p><h2>Find a file<span>.</span></h2><label for="search">Search by filename or path</label><input id="search" type="search" placeholder="Try a filename or folder…" autocomplete="off"><p id="count" class="small"></p><div id="results"></div></aside></div><script>const files=[".editorconfig",".gitattributes",".github/workflows/ci.yml",".gitignore",".streamlit/config.toml","CONTRIBUTING.md","Documentation.html","LICENSE","README.md","app_pages/applications.py","app_pages/setup.py","content.example/coverletter_reference.md","content.example/data/coverletter_reference.md","content.example/data/project_notes.md","content.example/data/prompts.md","content.example/data/resume.md","content.example/growth/coverletter_reference.md","content.example/growth/project_notes.md","content.example/growth/prompts.md","content.example/growth/resume.md","content.example/project_notes.md","content.example/prompts.md","content.example/resume.md","content.example/software/coverletter_reference.md","content.example/software/project_notes.md","content.example/software/prompts.md","content.example/software/resume.md","docs/CODEBASE.md","docs/CUSTOMISING.md","docs/DESIGN.md","docs/GETTING_STARTED.md","docs/customising-content.html","docs/docs.config.json","docs/fonts/Manrope-OFL.txt","docs/fonts/manrope.ttf","docs/guide-content.html","docs/how-it-works-content.html","docs/implementation-content.html","docs/site/CONTRIBUTING.html","docs/site/README.html","docs/site/customising.html","docs/site/docs/CODEBASE.html","docs/site/docs/CUSTOMISING.html","docs/site/docs/DESIGN.html","docs/site/docs/GETTING_STARTED.html","docs/site/guide.html","docs/site/how-it-works.html","docs/site/implementation.html","docs/site/index.html","docs/site/style.css","docs/style-source.css","job_apply_agent/__init__.py","job_apply_agent/__main__.py","job_apply_agent/browser_fetch.py","job_apply_agent/cli.py","job_apply_agent/company_research.py","job_apply_agent/config.py","job_apply_agent/cv_formatter.py","job_apply_agent/docs_writer.py","job_apply_agent/jd_extractor.py","job_apply_agent/llm.py","job_apply_agent/local_settings.py","job_apply_agent/pipeline.py","job_apply_agent/profiles.py","job_apply_agent/prompt_loader.py","job_apply_agent/run_store.py","job_apply_agent/setup_template.py","job_apply_agent/theme.css","job_apply_agent/ui.py","package-lock.json","package.json","pyproject.toml","requirements-dev.txt","requirements.txt","scripts/build-docs.mjs","scripts/test-docs.mjs","setup.bat","setup.sh","start.bat","start.sh","streamlit_app.py","tests/conftest.py","tests/test_cli.py","tests/test_config_and_settings.py","tests/test_cv_formatter.py","tests/test_docs_writer.py","tests/test_jd_extractor.py","tests/test_llm.py","tests/test_pipeline.py","tests/test_profiles.py","tests/test_prompt_loader.py","tests/test_run_store.py","tests/test_ui.py"];const root="../..";const site=".";const input=document.getElementById('search'),results=document.getElementById('results'),count=document.getElementById('count');function render(){const q=input.value.toLowerCase().trim();const matches=files.filter(f=>f.toLowerCase().includes(q));count.textContent=matches.length+' files';results.replaceChildren();for(const f of matches){const a=document.createElement('a');a.textContent=f;a.href=/\.md$/i.test(f)?site+'/'+f.replace(/\.md$/i,'.html'):root+'/'+f;results.append(a)}}input.addEventListener('input',render);render();for(const side of ['left','right']){const b=document.getElementById(side+'-toggle'),panel=document.getElementById(side);b.addEventListener('click',()=>{panel.hidden=!panel.hidden;b.setAttribute('aria-expanded',String(!panel.hidden));document.getElementById('layout').classList.toggle('hide-'+side,panel.hidden)})}</script></body></html>

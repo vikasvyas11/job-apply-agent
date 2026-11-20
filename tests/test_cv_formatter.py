@@ -28,7 +28,7 @@ def test_classifies_every_line_kind():
     assert by_text["WORK EXPERIENCE"] == "heading"
     assert by_text["PROJECTS"] == "heading"
     assert by_text["Did a thing."] == "bullet"
-    assert by_text["Tools/Skills: Python, SQL"] == "normal"
+    assert by_text["Tools/Skills: Python, SQL"] == "skills"
 
 
 def test_entry_bolds_only_the_title():
@@ -93,3 +93,71 @@ def test_consecutive_bullets_share_one_bullet_request():
     specs = parse_cv("Jane\ncontact\nWORK EXPERIENCE\n* a\n* b\n* c\n")
     _, requests = cv_formatter.build_tab_content("t.1", 1, specs)
     assert sum("createParagraphBullets" in r for r in requests) == 1
+
+
+def test_blank_lines_never_become_paragraphs():
+    """Empty paragraphs would take the template's default size and spacing and
+    give uneven gaps, so all spacing comes from paragraph styles instead."""
+    specs = parse_cv("Jane\ncontact\n\n\nSUMMARY\n\ntext\n\n**A** | B | 2024\n\n* one\n\n* two\n")
+    assert "blank" not in [s.kind for s in specs]
+
+
+def test_every_paragraph_gets_explicit_spacing_and_single_line_spacing():
+    text, requests = cv_formatter.build_tab_content("t.1", 1, parse_cv(CV))
+    paragraph_styles = [
+        r["updateParagraphStyle"] for r in requests
+        if "updateParagraphStyle" in r and "namedStyleType" in r["updateParagraphStyle"]["paragraphStyle"]
+    ]
+    assert len(paragraph_styles) == len([ln for ln in text.splitlines() if ln])
+    for style in paragraph_styles:
+        ps = style["paragraphStyle"]
+        assert ps["lineSpacing"] == cv_formatter._LINE_SPACING_PCT
+        assert "spaceAbove" in ps and "spaceBelow" in ps
+        assert "lineSpacing" in style["fields"]
+
+
+def test_bullet_runs_get_tighter_indents():
+    specs = parse_cv("Jane\ncontact\nWORK EXPERIENCE\n* a\n* b\n")
+    _, requests = cv_formatter.build_tab_content("t.1", 1, specs)
+    indents = [
+        r["updateParagraphStyle"]["paragraphStyle"] for r in requests
+        if "updateParagraphStyle" in r and "indentStart" in r["updateParagraphStyle"]["paragraphStyle"]
+    ]
+    assert indents == [{
+        "indentFirstLine": {"magnitude": cv_formatter._BULLET_INDENT_FIRST_LINE_PT, "unit": "PT"},
+        "indentStart": {"magnitude": cv_formatter._BULLET_INDENT_START_PT, "unit": "PT"},
+    }]
+
+
+def test_skills_line_bolds_only_its_label_even_when_written_as_a_bullet():
+    specs = parse_cv("Jane\ncontact\nWORK EXPERIENCE\n* Tools/Skills: Python, SQL\n")
+    skills = specs[-1]
+    assert skills.kind == "skills"
+    assert skills.text == "Tools/Skills: Python, SQL"
+    assert skills.text[: skills.bold_len] == "Tools/Skills:"
+
+
+def test_headings_are_spaced_further_from_content_than_entries():
+    above = {kind: cv_formatter._SPACING_PT[kind][0] for kind in ("heading", "entry", "bullet")}
+    assert above["heading"] > above["entry"] > above["bullet"]
+
+
+def test_shouting_entry_titles_are_title_cased_but_acronyms_survive():
+    specs = parse_cv("Jane\ncontact\nWORK EXPERIENCE\n**AI AND AUTOMATION CONSULTANT** | Acme | 2026\n")
+    assert specs[-1].text.startswith("AI and Automation Consultant | Acme")
+    mixed = parse_cv("Jane\ncontact\nWORK EXPERIENCE\n**Data Scientist (NLP)** | Acme | 2026\n")
+    assert mixed[-1].text.startswith("Data Scientist (NLP) |")  # already mixed case: untouched
+
+
+def test_duty_lines_without_bullet_markers_become_bullets():
+    # Seen in a real Growth run: every "* " marker dropped.
+    cv = (
+        "Jane\ncontact\nPROFESSIONAL SUMMARY\nA summary sentence.\nWORK EXPERIENCE\n"
+        "Founder | Acme, London | 2026 - Present\nFounded the firm.\nWon a contract.\n"
+        "Tools/Skills: Sales, Excel\nTECHNICAL SKILLS\nLanguages - Python\n"
+    )
+    by_text = {s.text: s.kind for s in parse_cv(cv)}
+    assert by_text["Founded the firm."] == "bullet" and by_text["Won a contract."] == "bullet"
+    assert by_text["A summary sentence."] == "normal"  # no entry above it
+    assert by_text["Languages - Python"] == "normal"  # new section resets
+    assert by_text["Tools/Skills: Sales, Excel"] == "skills"

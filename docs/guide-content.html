@@ -1,0 +1,75 @@
+<h1>User guide</h1>
+<p class="lead">How to set the agent up once, choose a flow and a region, and turn a batch of job links into tailored CVs and cover letters in Google Docs. Updated 20 November 2026.</p>
+
+<h2>What it does</h2>
+<p>You paste up to ten job links. For each one the agent reads the job description, looks up the company, rewrites your master CV for that role and writes a cover letter in your voice. Both land in a copy of your Google Doc template, one tab each. The writing is done by a model running on your own computer through <a href="https://ollama.com">Ollama</a>, so your CV is never sent to an AI company.</p>
+<blockquote>It drafts; you decide. Read both documents before you send anything.</blockquote>
+
+<h2>Flows: one type of application per run</h2>
+<p>A <strong>flow</strong> is a complete, separate set of material for one kind of role. Each flow has its own master CV, project notes, cover letter reference and prompts.</p>
+<table>
+<thead><tr><th>Flow</th><th>Use it for</th><th>What its CV leads with</th></tr></thead>
+<tbody>
+<tr><td><strong>Data Science</strong></td><td>Data scientist and analyst roles</td><td>Analysis, statistics, modelling, SQL and research</td></tr>
+<tr><td><strong>Growth</strong></td><td>Growth, operations and founder's office roles</td><td>Building teams and processes, go-to-market, pricing, customers</td></tr>
+<tr><td><strong>Software Dev</strong></td><td>Software engineering roles</td><td>Systems, stacks, architecture, testing and shipped projects</td></tr>
+</tbody>
+</table>
+<p>A run uses exactly one flow. Every link in that batch gets that flow's CV, notes and prompts, and the other two flows are never read, so a Growth application can't pick up Software Dev bullets or talking points. Put only one type of job link into a run: data science links in a Data Science run, and so on.</p>
+
+<h2>Regions: what goes on the CV's contact line</h2>
+<p>Each CV's contact line uses two placeholders, <code>{{LOCATION}}</code> and <code>{{PHONE}}</code>. When you start a run you pick a <strong>Region</strong>, and its city and phone number fill those placeholders. The app ships with two regions, <strong>UK</strong> and <strong>India</strong>; you set their details on the Setup page. Cover letters never include your location or phone number.</p>
+
+<h2>Set up once</h2>
+<ol>
+<li>Install <a href="https://www.python.org/downloads/">Python 3.11 or newer</a> and <a href="https://ollama.com/download">Ollama</a>.</li>
+<li>Run <code>setup.bat</code> on Windows or <code>./setup.sh</code> on macOS and Linux.</li>
+<li>Create a Google OAuth client and a template Google Doc with two tabs named <strong>CV</strong> and <strong>Cover Letter</strong>. The <a href="docs/GETTING_STARTED.html">setup document</a> walks through both.</li>
+<li>Start the app with <code>start.bat</code> or <code>./start.sh</code>. A browser tab opens at <code>http://localhost:8501</code>.</li>
+<li>Open <strong>Setup</strong> and work through its four tabs: <strong>Profile</strong> (your name and each region's city and phone), <strong>Documents</strong> (each flow's CV, cover letter reference, project notes and prompts), <strong>AI model</strong> and <strong>Google</strong>.</li>
+</ol>
+<p>The sidebar shows what is still missing. When it reads <strong>Ready to generate</strong>, you are set.</p>
+
+<h2>Generate a batch</h2>
+<ol>
+<li>On <strong>Applications</strong>, choose the <strong>Application type</strong> (the flow).</li>
+<li>Choose the <strong>Region</strong>.</li>
+<li>Paste one job link per slot. Add the company name if the page might not show it. If a site needs a login (LinkedIn often does), open <strong>Paste the job description instead</strong> and paste the text.</li>
+<li>Click <strong>Generate all</strong>.</li>
+</ol>
+<figure class="shot"><div class="bar"><i></i><i></i><i></i><b>Job Application Agent</b></div><div class="body">
+  <div class="ui-h">Applications</div>
+  <div class="ui-grid">
+    <div class="ui-field"><label>Application type</label><div class="ui-box hl">Software Dev</div></div>
+    <div class="ui-field"><label>Region</label><div class="ui-box hl">UK</div></div>
+  </div><span class="mk">1</span><span class="mk">2</span>
+  <div class="ui-sub">JOB LINKS</div>
+  <div class="ui-field"><label>1</label><div class="ui-box hl">Link to the job posting</div></div><span class="mk">3</span>
+  <div class="ui-field"><label>2</label><div class="ui-box dim">Link to the job posting</div></div>
+  <div class="ui-btns start"><span class="ui-btn primary hl">Generate all</span></div><span class="mk">4</span>
+</div><figcaption><strong>Marked illustration.</strong> <span class="mk">1</span> choose the flow; <span class="mk">2</span> choose the region; <span class="mk">3</span> paste one link per slot; <span class="mk">4</span> start the batch.</figcaption></figure>
+<p>Jobs run one after another. A progress bar fills as each one finishes, and the page refreshes itself, so there is nothing to click while you wait. Expect a few minutes per job on a laptop. You can close the tab and come back; the work continues in the background and every finished job is saved to <code>output/runs/</code>. Only closing the terminal window that started the app stops it.</p>
+
+<h2>Read the results</h2>
+<p>Each finished job appears as a sheet with a green edge for success or a red edge for a failure. It shows the role and company, an <strong>Open Google Doc</strong> button, a run log, and tabs with the tailored CV and the cover letter. Earlier batches are under <strong>Past runs</strong>, labelled with their flow and region.</p>
+
+<h2>Command line</h2>
+<p>The same pipeline runs without the browser:</p>
+<pre><code>python -m job_apply_agent --flow software --region UK --job-url "https://example.com/job"</code></pre>
+<p><code>--flow</code> is <code>data</code>, <code>growth</code> or <code>software</code>; <code>--region</code> is any region from your settings.</p>
+
+<h2>Troubleshooting</h2>
+<table>
+<thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td>A job fails with <em>Your Google login has expired or is missing</em></td><td>Open <strong>Setup</strong>, then <strong>Google</strong>, click <strong>Connect Google account</strong> and sign in, then generate again. Google ends test-mode logins after 7 days; the agent stops instead of waiting for a sign-in nobody sees.</td></tr>
+<tr><td><em>Your … CV is still the placeholder</em></td><td>Add that flow's CV under <strong>Setup</strong>, <strong>Documents</strong>.</td></tr>
+<tr><td><em>Could not reach Ollama</em></td><td>Start Ollama and check the model name under <strong>AI model</strong>.</td></tr>
+<tr><td>A link fails to load</td><td>Paste the job description into the box under that link.</td></tr>
+<tr><td>A run says <strong>Interrupted</strong></td><td>The app was restarted mid-batch. Start the remaining links again.</td></tr>
+<tr><td><em>An Application Control policy has blocked this file</em> (Windows)</td><td>Smart App Control blocked an unsigned <code>python.exe</code>. Install Python from python.org, delete <code>.venv</code> and run the setup script again.</td></tr>
+</tbody>
+</table>
+
+<h2>Status and evidence — 20 November 2026</h2>
+<p>Checked on 20 November 2026: 123 automated tests pass, covering flow isolation, region contact lines, prompts, the CV formatter, the pipeline and the pages. Each flow was generated end to end twice with a real local model, and the outputs were checked against the rules in this guide; see the <a href="implementation.html">implementation guide</a> for the results. <strong>Not yet done or verified:</strong> a Google Docs write in this round of testing, because the saved Google login had expired and only its owner can sign in again.</p>

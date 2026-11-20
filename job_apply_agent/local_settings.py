@@ -1,9 +1,10 @@
 """User-editable settings, persisted as JSON and set through the in-app Setup
-page — nobody using this copy of the app should ever need to open a .py file.
-config.py reads these at import time and falls back to sensible defaults if
-the settings file doesn't exist yet (first run).
+page, so nobody using the app should need to open a .py file. config.py reads
+these on every access and falls back to sensible defaults if the settings file
+doesn't exist yet (first run).
 """
 import json
+from copy import deepcopy
 from pathlib import Path
 
 SETTINGS_FILE = Path(__file__).resolve().parent.parent / "local_settings.json"
@@ -13,18 +14,27 @@ DEFAULTS = {
     "template_doc_id": "",
     "ollama_model": "qwen3.5:latest",
     "output_folder_id": "",
+    # Contact details per region, used for the CV's {{LOCATION}} and {{PHONE}}
+    # placeholders. Edit on the Setup page; add more regions here if you need them.
+    "regions": {
+        "UK": {"location": "London", "phone": ""},
+        "India": {"location": "Bangalore", "phone": ""},
+    },
 }
 
 
 def load() -> dict:
+    merged = deepcopy(DEFAULTS)
     if not SETTINGS_FILE.exists():
-        return dict(DEFAULTS)
+        return merged
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return dict(DEFAULTS)
-    merged = dict(DEFAULTS)
-    merged.update(data)
+        return merged
+    if isinstance(data, dict):
+        merged.update(data)
+    if not isinstance(merged.get("regions"), dict) or not merged["regions"]:
+        merged["regions"] = deepcopy(DEFAULTS["regions"])
     return merged
 
 

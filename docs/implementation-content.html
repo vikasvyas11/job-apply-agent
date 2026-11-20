@@ -1,0 +1,67 @@
+<h1>Implementation guide</h1>
+<p class="lead">How the code is organised, how it is tested, what was checked and what changed when. Start here before changing anything. Updated 20 November 2026.</p>
+
+<h2>Code map</h2>
+<table>
+<thead><tr><th>Path</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>streamlit_app.py</code></td><td>Entry point: page config, theme, sidebar (brand, page links, ready-check), runs the chosen page.</td></tr>
+<tr><td><code>app_pages/applications.py</code></td><td>Flow and Region dropdowns, the ten job slots, the background worker, live progress and result sheets.</td></tr>
+<tr><td><code>app_pages/setup.py</code></td><td>Name, region contact details, each flow's four content files, model, Google template and login.</td></tr>
+<tr><td><code>job_apply_agent/profiles.py</code></td><td>The three flows and the regions. A <code>Profile(flow, region)</code> is the only way content is located.</td></tr>
+<tr><td><code>job_apply_agent/pipeline.py</code></td><td>One job end to end, and a batch that runs jobs in order with one profile and isolates failures.</td></tr>
+<tr><td><code>job_apply_agent/llm.py</code></td><td>Ollama client, prompt assembly, contact-header enforcement, contamination and cliché retries.</td></tr>
+<tr><td><code>job_apply_agent/cv_formatter.py</code></td><td>Turns the model's CV text into Google Docs requests: spacing, line spacing, bold, bullets, links.</td></tr>
+<tr><td><code>job_apply_agent/docs_writer.py</code></td><td>Google login, template copy, writing both tabs, the cover letter style, retries on transient errors.</td></tr>
+<tr><td><code>job_apply_agent/jd_extractor.py</code>, <code>browser_fetch.py</code>, <code>company_research.py</code></td><td>Reading job pages (with a headless-browser fallback) and company research.</td></tr>
+<tr><td><code>job_apply_agent/run_store.py</code></td><td>Runs on disk: status (including flow and region) and one file per finished job.</td></tr>
+<tr><td><code>job_apply_agent/ui.py</code>, <code>theme.css</code></td><td>Look and feel, status chips, the run meter and the readiness checks.</td></tr>
+<tr><td><code>job_apply_agent/cli.py</code></td><td><code>python -m job_apply_agent --flow … --region … --job-url …</code></td></tr>
+<tr><td><code>content/&lt;flow&gt;/</code>, <code>content.example/&lt;flow&gt;/</code></td><td>Personal content per flow (git-ignored) and the placeholders it is seeded from.</td></tr>
+<tr><td><code>tests/</code></td><td>pytest suite; never touches the network, the model, Google or real content.</td></tr>
+<tr><td><code>scripts/build-docs.mjs</code>, <code>docs/*-content.html</code></td><td>This documentation: authored guides plus converted Markdown, built into <code>docs/site/</code>.</td></tr>
+</tbody>
+</table>
+
+<h2>Key decisions</h2>
+<ul>
+<li><strong>Isolation by construction.</strong> Flows are folders, and a run holds one <code>Profile</code> that every content read goes through. There is no shared CV to filter, so there is nothing to leak.</li>
+<li><strong>Regions as data, not code.</strong> City and phone live in <code>local_settings.json</code>; the CVs carry <code>{{LOCATION}}</code> and <code>{{PHONE}}</code>. The code holds no personal details.</li>
+<li><strong>Spacing from styles only.</strong> Blank lines in model output are dropped and every paragraph gets explicit spacing and single line spacing, so the template's defaults can't make gaps uneven.</li>
+<li><strong>No browser prompts from background work.</strong> A batch asks Google for credentials non-interactively and fails with a clear message; only the Setup page may open a sign-in window.</li>
+</ul>
+
+<h2>Run the checks</h2>
+<pre><code>.venv\Scripts\python -m pytest
+.venv\Scripts\python -m ruff check .
+npm run docs:test</code></pre>
+
+<h2>Change log</h2>
+<h3>20 November 2026</h3>
+<ul>
+<li>Added three flows (Data Science, Growth, Software Dev), each with its own CV, project notes, cover letter reference and prompts, and a flow dropdown on the Applications page and in the CLI.</li>
+<li>Added regions (UK, India) that fill the CV contact line; cover letters are told never to include location or phone.</li>
+<li>Fixed uneven spacing in the generated CV: blank lines no longer become empty paragraphs; explicit spacing, line spacing and tighter bullet indents; bold <strong>Tools/Skills:</strong> label; one explicit style for the cover letter.</li>
+<li>Added an entry check after CV generation: entries not in the flow's master CV are removed, and titles take the master CV's casing. Prompted by a real run in which the model invented a project and pulled another in from background notes.</li>
+<li>Background runs no longer open a Google sign-in window when the login has expired; the sidebar now reports an expired login instead of calling it connected.</li>
+<li>Added this HTML documentation.</li>
+</ul>
+<h3>9 October 2026</h3>
+<ul>
+<li>Redesigned interface: sidebar navigation, ready-check, numbered job queue, live progress, result sheets. Server bound to <code>127.0.0.1</code>; Streamlit usage statistics off.</li>
+</ul>
+<h3>8 October 2026</h3>
+<ul>
+<li>Merged earlier copies into one package with tests, linting and a public export with a leak check.</li>
+</ul>
+
+<h2>Status and evidence — 20 November 2026</h2>
+<p>Checked on 20 November 2026 on a Windows laptop (CPU only), with the local model <code>qwen3.5:latest</code>.</p>
+<ul>
+<li><strong>Automated tests:</strong> 123 pass (<code>pytest</code>), <code>ruff check</code> is clean, and <code>npm run docs:test</code> passes for this documentation.</li>
+<li><strong>Interface, in a real browser:</strong> choosing <strong>Software Dev</strong> and <strong>India</strong> reached the batch runner unchanged, the run recorded and displayed that profile, and the page refreshed itself until the batch finished. On Setup, saving the Growth CV changed only the Growth file, and saving a region's phone number updated the settings.</li>
+<li><strong>Real generation, two full rounds:</strong> one job per flow (Data Science with UK, Growth with India, Software Dev with UK), CV and cover letter each, about 4 to 7 minutes per document. In both rounds every CV used the right region's city and phone, kept the master CV's sections in order with no Additional Experience section, contained none of another flow's talking points and no mention of SAIL; every letter opened with "Dear Hiring Manager,", signed off with "Best," and the applicant's first name, had no location or phone, no em dashes and no banned phrases.</li>
+<li><strong>What the first round caught:</strong> the model invented an entry (a "v1" of a real project), pulled a project from background notes into the wrong flow, wrote titles in capitals, upgraded "supported" to "led", and confused Fastify with FastAPI. The entry check, title casing, accuracy rules and a clarified project note were added; the second round showed none of these. In one second-round CV the model dropped every bullet marker; plain lines under an entry are now treated as bullets.</li>
+<li><strong>Layout:</strong> the formatter's output for each second-round CV was rendered at A4 width with the same sizes and spacing: 1.2 to 1.5 pages, with even gaps.</li>
+</ul>
+<p><strong>Not yet done or verified:</strong> writing to Google Docs in this round. The saved Google login had expired (Google's 7-day limit for apps in Testing), and only its owner can sign in again. The model can still round a figure (one CV wrote 15% for 15-20%), so every document needs reading before it is sent.

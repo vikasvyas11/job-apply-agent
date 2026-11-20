@@ -1,0 +1,41 @@
+<h1>Customising</h1>
+<p class="lead">Where each piece of your material lives, and how to change what the documents say and how they look. Updated 20 November 2026.</p>
+
+<h2>Content files, one folder per flow</h2>
+<p>Each flow has four plain-text files. Edit them on the Setup page (<strong>Documents</strong>, then pick the flow) or in any text editor. They are read fresh on every job, so changes apply to the next application.</p>
+<table>
+<thead><tr><th>File</th><th>What goes in it</th></tr></thead>
+<tbody>
+<tr><td><code>content/&lt;flow&gt;/resume.md</code></td><td>Your complete CV for this kind of role. The model selects from it and never invents experience.</td></tr>
+<tr><td><code>content/&lt;flow&gt;/project_notes.md</code></td><td>The real story behind the bullets: the problem, what you did, the stack or tools, the outcome. Cover letters draw on it.</td></tr>
+<tr><td><code>content/&lt;flow&gt;/coverletter_reference.md</code></td><td>One letter in the voice and structure you want. Only its shape and tone are used.</td></tr>
+<tr><td><code>content/&lt;flow&gt;/prompts.md</code></td><td>The instructions for this flow, under three headings that must stay exactly as written: <code>Prompt for Resume:</code>, <code>Prompt for Cover letter:</code> and <code>Writing Style:</code>.</td></tr>
+</tbody>
+</table>
+<p><code>&lt;flow&gt;</code> is <code>data</code>, <code>growth</code> or <code>software</code>. A fresh install copies placeholders from <code>content.example/</code>, and existing files are never overwritten.</p>
+
+<h2>Keep the flows distinct</h2>
+<p>The same job can appear in more than one flow, but each flow should describe it differently. In a Growth CV a role reads as teams, customers and commercial results; in a Software Dev CV the same role reads as systems and code. The agent guarantees a run only reads its own flow; making the material genuinely different is up to you.</p>
+
+<h2>Shape of a master CV</h2>
+<ul>
+<li>Line one is your name; line two is the contact line, using <code>{{LOCATION}}</code> and <code>{{PHONE}}</code>, with links as <code>[label](https://…)</code>.</li>
+<li>Section headings are ALL CAPS. Whatever headings you use, in that order, are the ones the tailored CV keeps. To drop a section, delete it from the master CV.</li>
+<li>Entries are <code>**Job Title** | Organisation, City | Mon YYYY - Mon YYYY</code>; bullets start with <code>* </code>; each entry can end with a <code>Tools/Skills:</code> line.</li>
+<li>Keep the <code>PROFESSIONAL SUMMARY</code> heading: the real contact header is restored above it after generation.</li>
+</ul>
+
+<h2>Regions</h2>
+<p>Set each region's city and phone under <strong>Setup</strong>, <strong>Profile</strong>, <strong>Contact details by region</strong>. To add a region, add an entry under <code>regions</code> in <code>local_settings.json</code>; it then appears in the Region dropdown.</p>
+
+<h2>Change the model</h2>
+<p>Pull a model with <code>ollama pull &lt;name&gt;</code> and set its name under <strong>Setup</strong>, <strong>AI model</strong>. Larger models write better and run slower.</p>
+
+<h2>Change the CV layout</h2>
+<p>Spacing, font sizes, bold rules and bullet indents are tables at the top of <code>job_apply_agent/cv_formatter.py</code>: <code>_SPACING_PT</code>, <code>_FONT_SIZE_PT</code>, <code>_LINE_SPACING_PCT</code> and the bullet indent constants. Cover letter size and line spacing are in <code>job_apply_agent/docs_writer.py</code>. The bullet budget per role is in the <code>LENGTH</code> paragraph of <code>build_cv_prompt</code> in <code>job_apply_agent/llm.py</code>.</p>
+
+<h2>Change the look of the app</h2>
+<p>Native widget colours are in <code>.streamlit/config.toml</code>. Layout, type and custom pieces are in <code>job_apply_agent/theme.css</code>, with the palette as variables at the top. The interface uses only fonts that ship with Streamlit or the operating system, so it makes no requests to font servers.</p>
+
+<h2>Status and evidence — 20 November 2026</h2>
+<p>Automated tests cover per-flow seeding from <code>content.example/</code>, region placeholders (including an empty value), and the Setup page rendering without errors. Saving edits through the Setup page was checked by hand in a browser.</p>

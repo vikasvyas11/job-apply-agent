@@ -5,7 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from job_apply_agent import config, run_store, ui
+from job_apply_agent import config, profiles, run_store, ui
 from job_apply_agent.pipeline import JobInput, JobResult, run_batch
 
 N_SLOTS = 10
@@ -36,7 +36,7 @@ def _result_to_dict(result: JobResult) -> dict:
     }
 
 
-def _worker(jobs: list[JobInput], run_dir: Path) -> None:
+def _worker(jobs: list[JobInput], run_dir: Path, profile: profiles.Profile) -> None:
     """Runs on a plain background thread owned by the Streamlit *server*
     process, so it keeps going to completion regardless of whether any browser
     tab is attached, reconnecting, or asleep."""
@@ -48,7 +48,7 @@ def _worker(jobs: list[JobInput], run_dir: Path) -> None:
         run_store.write_status(run_dir, status)
 
     try:
-        run_batch(jobs, on_result=on_result)
+        run_batch(jobs, profile=profile, on_result=on_result)
     except Exception as exc:
         # run_batch isolates per-job failures, so reaching here means a bug.
         # Record it instead of letting the thread vanish silently.
@@ -104,6 +104,13 @@ def _render_job(run_dir: Path, idx: int, r: dict) -> None:
                 )
 
 
+def _run_label(status: dict) -> str:
+    """"Software Dev, UK" for runs that recorded their profile; "" for older runs."""
+    flow = profiles.FLOWS.get(status.get("flow", ""), "")
+    region = status.get("region", "")
+    return ", ".join(part for part in (flow, region) if part)
+
+
 def _run_view(run_dir: Path, was_running: bool) -> None:
     """The progress meter and the result sheets. Re-reads the run from disk on
     every call, so it can be refreshed on a timer while the batch is running."""
@@ -116,6 +123,9 @@ def _run_view(run_dir: Path, was_running: bool) -> None:
         st.rerun()  # full rerun: stops the timer and re-enables the Generate button
 
     state = "finished" if done else ("running" if _is_live(run_dir) else "interrupted")
+    label = _run_label(status)
+    if label:
+        st.html(f'<div class="run-profile">{ui.chip(label, "neutral")}</div>')
     if n_jobs:
         st.html(ui.meter(completed, n_jobs, state))
     if state == "interrupted":
@@ -139,8 +149,9 @@ def _render_run(run_dir: Path) -> None:
 # ------------------------------------------------------------------------ page
 ui.page_header(
     "Applications",
-    f"Paste up to {N_SLOTS} job links. Each one becomes a tailored CV and cover letter in a copy of your "
-    f"Google Doc template, written by {config.OLLAMA_MODEL} on this computer.",
+    f"Choose the type of role and the region, then paste up to {N_SLOTS} job links of that type. Each becomes "
+    f"a tailored CV and cover letter in a copy of your Google Doc template, written by {config.OLLAMA_MODEL} "
+    f"on this computer.",
 )
 
 registry = _worker_registry()
@@ -176,7 +187,18 @@ def _slot(i: int) -> tuple[str, str, str]:
     return url, company, pasted
 
 
+region_keys = list(profiles.regions())
+
 with st.form("jobs_form"):
+    flow_col, region_col = st.columns(2)
+    flow = flow_col.selectbox(
+        "Application type", options=list(profiles.FLOWS), format_func=profiles.FLOWS.get, key="run_flow",
+        help="One type per run: every link in this batch gets the CV, notes and prompts of this flow only.",
+    )
+    region = region_col.selectbox(
+        "Region", options=region_keys, key="run_region",
+        help="Sets the location and phone number on the CV. Edit them on the Setup page.",
+    )
     rows = [_slot(i) for i in range(N_VISIBLE_SLOTS)]
     more_in_use = any(st.session_state.get(f"url_{i}", "").strip() for i in range(N_VISIBLE_SLOTS, N_SLOTS))
     with st.expander(f"Add more jobs (up to {N_SLOTS - N_VISIBLE_SLOTS} more)", expanded=more_in_use):
@@ -196,9 +218,17 @@ if submitted:
     ]
     if not jobs:
         st.warning("Add at least one job link first.")
+    elif flow not in ui.flows_with_real_cv():
+        st.warning(
+            f"Your {profiles.FLOWS[flow]} CV is still the placeholder. Add it on the Setup page "
+            f"(Documents, {profiles.FLOWS[flow]}) before generating."
+        )
     else:
-        run_dir = run_store.new_run(len(jobs))
-        thread = threading.Thread(target=_worker, args=(jobs, run_dir), daemon=True, name="batch-worker")
+        profile = profiles.Profile(flow=flow, region=region)
+        run_dir = run_store.new_run(len(jobs), flow=profile.flow, region=profile.region)
+        thread = threading.Thread(
+            target=_worker, args=(jobs, run_dir, profile), daemon=True, name="batch-worker",
+        )
         registry["thread"] = thread
         registry["run_dir"] = run_dir
         thread.start()
@@ -218,6 +248,8 @@ if past_runs:
         for p in past_runs:
             status = run_store.read_status(p)
             label = f"{p.name}: {status.get('completed', 0)}/{status.get('n_jobs', '?')} jobs"
+            if _run_label(status):
+                label += f" ({_run_label(status)})"
             if st.button(label, key=f"load_{p.name}"):
                 st.session_state.active_run_dir = p
                 st.rerun()

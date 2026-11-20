@@ -1,0 +1,192 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>docs / GETTING_STARTED · Job Application Agent</title><link rel="stylesheet" href="../style.css"></head><body><header><a class="brand" href="../index.html"><b>J</b> jobagent<span>.</span> <small>FIELD NOTES</small></a><div class="controls"><button id="left-toggle" aria-controls="left" aria-expanded="true">☰ <span>Documents</span></button><button id="right-toggle" aria-controls="right" aria-expanded="true">⌕ <span>Find files</span></button></div></header><div class="layout" id="layout"><aside id="left"><p class="eyebrow">THE LIBRARY</p><h2>On this project<span>.</span></h2><nav><a href="../index.html">Overview</a><a href="../guide.html">User guide</a><a href="../how-it-works.html">How it works</a><a href="../customising.html">Customising</a><a href="../implementation.html">Implementation guide</a><a href="../CONTRIBUTING.html">CONTRIBUTING</a><a href="../README.html">README</a><a href="../docs/CODEBASE.html">docs / CODEBASE</a><a href="../docs/CUSTOMISING.html">docs / CUSTOMISING</a><a href="../docs/DESIGN.html">docs / DESIGN</a><a href="../docs/GETTING_STARTED.html" aria-current="page">docs / GETTING_STARTED</a></nav><p class="small">Made for curious minds.<br>Available offline.</p></aside><main><div class="content"><p class="eyebrow">JOB APPLICATION AGENT / DOCUMENTATION</p><h1>Getting started</h1>
+<p>A complete walkthrough from nothing to your first generated application. Budget about 30 minutes, most of it the one-off Google Cloud setup and the model download.</p>
+<ol>
+<li><a href="#1-install-the-prerequisites">Install the prerequisites</a></li>
+<li><a href="#2-get-the-code-and-install-it">Get the code and install it</a></li>
+<li><a href="#3-create-a-google-oauth-client">Create a Google OAuth client</a></li>
+<li><a href="#4-create-the-template-google-doc">Create the template Google Doc</a></li>
+<li><a href="#5-pull-a-model">Pull a model</a></li>
+<li><a href="#6-start-the-app-and-complete-setup">Start the app and complete Setup</a></li>
+<li><a href="#7-generate-your-first-application">Generate your first application</a></li>
+<li><a href="#8-troubleshooting">Troubleshooting</a></li>
+</ol>
+<h2>1. Install the prerequisites</h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Why</th>
+<th>Check it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Python 3.11+</strong></td>
+<td>runs the app</td>
+<td><code>python --version</code> (on macOS/Linux often <code>python3 --version</code>)</td>
+</tr>
+<tr>
+<td><strong>Ollama</strong></td>
+<td>runs the AI model locally, free</td>
+<td><code>ollama --version</code></td>
+</tr>
+<tr>
+<td><strong>Git</strong> (optional)</td>
+<td>to clone the repo; you can also download the ZIP from GitHub</td>
+<td><code>git --version</code></td>
+</tr>
+</tbody></table>
+<ul>
+<li>Python: <a href="https://www.python.org/downloads/">https://www.python.org/downloads/</a>. On Windows tick <strong>Add python.exe to PATH</strong>.</li>
+<li>Ollama: <a href="https://ollama.com/download">https://ollama.com/download</a>. Run the installer; it starts a background service on <code>localhost:11434</code>.</li>
+</ul>
+<h2>2. Get the code and install it</h2>
+<p>On the repository&#39;s GitHub page, click the green <strong>Code</strong> button and copy the HTTPS link (or choose <strong>Download ZIP</strong>, unzip it, and open a terminal in the unzipped folder). Then:</p>
+<pre><code class="language-bash">git clone &lt;the link you copied&gt;
+cd job-apply-agent
+</code></pre>
+<p>If you downloaded the ZIP, the folder may be called <code>job-apply-agent-main</code>; open a terminal inside it instead of running the two commands above.</p>
+<p>Then run the installer for your system. It creates a private virtual environment in <code>.venv/</code>, installs the dependencies, and downloads the headless Chromium used as a fallback for JavaScript-only job pages.</p>
+<ul>
+<li><strong>Windows:</strong> double-click <code>setup.bat</code></li>
+<li><strong>macOS / Linux:</strong> <code>./setup.sh</code></li>
+</ul>
+<p>Doing it by hand instead:</p>
+<pre><code class="language-bash">python -m venv .venv
+# Windows:        .venv\Scripts\activate
+# macOS / Linux:  source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+</code></pre>
+<h2>3. Create a Google OAuth client</h2>
+<p>The app writes to Google Docs on your behalf, so Google needs to know which application is asking. You create that &quot;application&quot; yourself, for free, and it only ever serves you.</p>
+<ol>
+<li>Open <a href="https://console.cloud.google.com/">https://console.cloud.google.com/</a> and create a project (any name, e.g. <code>job-apply-agent</code>).</li>
+<li><strong>APIs &amp; Services &gt; Enable APIs and services.</strong> Search for and enable both <strong>Google Docs API</strong> and <strong>Google Drive API</strong>.</li>
+<li><strong>APIs &amp; Services &gt; OAuth consent screen</strong> (may be called &quot;Google Auth Platform&quot;):<ul>
+<li>User type: <strong>External</strong>.</li>
+<li>Fill in an app name and your email.</li>
+<li>Under <strong>Test users</strong>, add your own Google account.</li>
+<li>Leave the publishing status on <strong>Testing</strong>. You do not need Google&#39;s verification for personal use.</li>
+</ul>
+</li>
+<li><strong>APIs &amp; Services &gt; Credentials &gt; Create credentials &gt; OAuth client ID.</strong> Application type: <strong>Desktop app</strong>. Create it.</li>
+<li>Download the JSON and save it as <strong><code>credentials.json</code> in the project root</strong>, next to <code>streamlit_app.py</code>.</li>
+</ol>
+<blockquote>
+<p><code>credentials.json</code> is a secret. It is already in <code>.gitignore</code>. Do not upload or share it.</p>
+</blockquote>
+<h2>4. Create the template Google Doc</h2>
+<p>Google&#39;s Docs API cannot create new tabs, so the app works from a template you build once: for every job it copies the template, then fills in the two tabs.</p>
+<ol>
+<li>Create a new blank Google Doc.</li>
+<li>Add two tabs (the tab icon in the left panel, or the <code>+</code> beside <strong>Tabs</strong>) and name them <strong>exactly</strong>:<ul>
+<li><code>CV</code></li>
+<li><code>Cover Letter</code></li>
+</ul>
+</li>
+<li>Leave them empty. The app clears and rewrites them on every run and sets the margins, fonts and spacing itself.</li>
+<li>Copy the document ID from the URL: <code>https://docs.google.com/document/d/</code><strong><code>THIS_PART</code></strong><code>/edit</code>.</li>
+<li>Optional: create a Drive folder for the output, and copy its ID from the folder URL (<code>.../folders/THIS_PART</code>). Generated documents are then filed there instead of loose in My Drive.</li>
+</ol>
+<h2>5. Pull a model</h2>
+<pre><code class="language-bash">ollama pull qwen3.5:latest
+</code></pre>
+<p>That is the default. Any model Ollama can run works; pick one that fits your machine and set its name on the Setup page. As a rule of thumb, bigger models write better but are slower; on a laptop without a GPU expect a few minutes per application with a mid-sized model. Browse <a href="https://ollama.com/library">https://ollama.com/library</a>.</p>
+<h2>6. Start the app and complete Setup</h2>
+<ul>
+<li><strong>Windows:</strong> double-click <code>start.bat</code></li>
+<li><strong>macOS / Linux:</strong> <code>./start.sh</code></li>
+</ul>
+<p>A browser tab opens at <code>http://localhost:8501</code>. <strong>Keep the terminal window open</strong>; closing it stops the app. Open <strong>Setup</strong> in the sidebar and go down the page:</p>
+<ol>
+<li><strong>Your details.</strong> Your full name. It names the generated documents and signs the cover letters.</li>
+<li><strong>Your CV.</strong> Replace the placeholder with your complete CV. See <a href="#what-the-cv-file-needs">what the CV file needs</a> below.</li>
+<li><strong>Cover letter reference.</strong> One real cover letter in the tone you want. Only structure and voice are copied, never its content.</li>
+<li><strong>Prompts.</strong> Sensible defaults are pre-filled. Edit later once you have seen some output.</li>
+<li><strong>Project notes.</strong> Optional but worth the effort: the real story behind your bullets.</li>
+<li><strong>Local AI model.</strong> Type the model name, <strong>Check Ollama</strong> to confirm it is running and pulled.</li>
+<li><strong>Google Doc template.</strong> Paste the document ID, <strong>Save</strong>, then <strong>Verify template</strong>. The first verification opens a browser window for Google login; approve it. If Google says the app is unverified, choose Advanced &gt; continue (it is your own app).</li>
+<li><strong>Connect Google account.</strong> Only needed if step 7 did not already log you in.</li>
+</ol>
+<p>Add the optional Drive folder ID in <code>local_settings.json</code> (<code>output_folder_id</code>) if you want one.</p>
+<h3>What the CV file needs</h3>
+<p>Each flow (<code>content/data/</code>, <code>content/growth/</code>, <code>content/software/</code>) has its own CV; fill in at least the flows you will use. The parser relies on a simple shape. Use <code>content.example/data/resume.md</code> as a model.</p>
+<ul>
+<li><strong>Line 1:</strong> your name. <strong>Line 2:</strong> your contact line, with <code>{{LOCATION}}</code> and <code>{{PHONE}}</code> where your city and phone go (filled from the region you pick) and links as <code>[label](https://...)</code>.</li>
+<li>Set each region&#39;s city and phone on the Setup page under <strong>Profile</strong>.</li>
+<li><strong>Section headings in ALL CAPS</strong> (<code>PROFESSIONAL SUMMARY</code>, <code>WORK EXPERIENCE</code>, <code>EDUCATION</code>, <code>PROJECTS</code>, <code>TECHNICAL SKILLS</code>, ...). Whatever headings you use, in whatever order, are the ones the tailored CV keeps.</li>
+<li><strong>Entries:</strong> <code>**Job Title** | Organisation, Location | Mon YYYY - Mon YYYY</code></li>
+<li><strong>Bullets:</strong> lines starting with <code>* </code>.</li>
+<li>Put in <strong>everything</strong>: every role, project and skill. The model selects the relevant parts per job, so a longer, accurate master CV gives better results than a trimmed one.</li>
+</ul>
+<h2>7. Generate your first application</h2>
+<p>At the top of the page choose the <strong>Application type</strong> (the flow: Data Science, Growth or Software Dev) and the <strong>Region</strong>. Every link in the batch uses that flow&#39;s CV and prompts only, so put one type of job in each run.</p>
+<ol>
+<li>On the main page paste a job URL into <strong>Job 1</strong>. Optionally add the company name, and paste the job description in the box underneath if you expect the link to be blocked (LinkedIn usually is).</li>
+<li>Click <strong>Generate all</strong>. You can add up to 10 jobs; they run one after another.</li>
+<li>Watch progress on the page, or close the tab and come back later. Results are saved as they finish.</li>
+<li>Each finished job shows the tailored CV, the cover letter, and an <strong>Open Google Doc</strong> link. Open it, read both tabs, edit freely, and export to PDF from Google Docs when you are happy.</li>
+</ol>
+<p>Past runs are listed under <strong>Past runs</strong> and stored in <code>output/runs/</code>.</p>
+<h2>8. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause and fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Error 403: access_denied</code> when logging in to Google</td>
+<td>Your account is not listed as a <strong>Test user</strong> on the OAuth consent screen. Add it (step 3) and retry.</td>
+</tr>
+<tr>
+<td>Google login suddenly required again after about a week</td>
+<td>Normal for apps in Testing mode (refresh tokens expire after 7 days). Click <strong>Connect Google account</strong> on Setup, or delete <code>token.json</code>.</td>
+</tr>
+<tr>
+<td><code>An Application Control policy has blocked this file</code> when starting Python (Windows)</td>
+<td>Windows Smart App Control blocks unsigned programs, and some Python builds (for example ones installed by <code>uv</code>) ship an unsigned <code>python.exe</code>. Install Python from <a href="https://www.python.org/downloads/">https://www.python.org/downloads/</a> (it is signed), delete the <code>.venv</code> folder and run <code>setup.bat</code> again. You do not need to turn Smart App Control off.</td>
+</tr>
+<tr>
+<td><code>Missing .../credentials.json</code></td>
+<td>Step 3.5: the file must be named exactly <code>credentials.json</code> and sit in the project root.</td>
+</tr>
+<tr>
+<td><code>404</code> from Drive on <code>files.copy</code></td>
+<td>Wrong template ID, or the account you logged in with cannot open the template. Re-verify on Setup.</td>
+</tr>
+<tr>
+<td><code>Template doc is missing a required tab</code></td>
+<td>The tabs must be named exactly <code>CV</code> and <code>Cover Letter</code> (case and spacing matter).</td>
+</tr>
+<tr>
+<td><code>Could not reach Ollama</code></td>
+<td>Start Ollama (it is usually a tray/menu-bar app) and run <code>ollama list</code> to confirm your model is there.</td>
+</tr>
+<tr>
+<td>Model returns very short or empty output</td>
+<td>The prompt may exceed what the model handles. The app already enlarges the context and retries once; try a different model, or shorten <code>project_notes.md</code>.</td>
+</tr>
+<tr>
+<td>Very slow generation</td>
+<td>Normal on CPU. Use a smaller model, or close other heavy programs.</td>
+</tr>
+<tr>
+<td>Job link fails to fetch</td>
+<td>Login walls and bot checks cannot be crossed. Paste the job description into the box under the link.</td>
+</tr>
+<tr>
+<td>CV spills onto a third page</td>
+<td>Tighten the bullet counts in the LENGTH block of <code>build_cv_prompt</code> in <code>job_apply_agent/llm.py</code>, or reduce sizes in <code>job_apply_agent/cv_formatter.py</code>.</td>
+</tr>
+</tbody></table>
+<p>Still stuck? Run a single job from the command line to see the full error text:</p>
+<pre><code class="language-bash">python -m job_apply_agent --job-url &quot;https://example.com/job&quot;
+</code></pre>
+<h2>Updating</h2>
+<pre><code class="language-bash">git pull
+pip install -r requirements.txt     # inside the virtual environment
+</code></pre>
+<p>Your <code>content/</code>, <code>credentials.json</code>, <code>token.json</code>, <code>local_settings.json</code> and <code>output/</code> are untouched by updates.</p>
+</div><footer>Job Application Agent <span>✳</span> Drafts, not autopilot.</footer></main><aside id="right"><p class="eyebrow">THE REPOSITORY</p><h2>Find a file<span>.</span></h2><label for="search">Search by filename or path</label><input id="search" type="search" placeholder="Try a filename or folder…" autocomplete="off"><p id="count" class="small"></p><div id="results"></div></aside></div><script>const files=[".editorconfig",".gitattributes",".github/workflows/ci.yml",".gitignore",".streamlit/config.toml","CONTRIBUTING.md","Documentation.html","LICENSE","README.md","app_pages/applications.py","app_pages/setup.py","content.example/coverletter_reference.md","content.example/data/coverletter_reference.md","content.example/data/project_notes.md","content.example/data/prompts.md","content.example/data/resume.md","content.example/growth/coverletter_reference.md","content.example/growth/project_notes.md","content.example/growth/prompts.md","content.example/growth/resume.md","content.example/project_notes.md","content.example/prompts.md","content.example/resume.md","content.example/software/coverletter_reference.md","content.example/software/project_notes.md","content.example/software/prompts.md","content.example/software/resume.md","docs/CODEBASE.md","docs/CUSTOMISING.md","docs/DESIGN.md","docs/GETTING_STARTED.md","docs/customising-content.html","docs/docs.config.json","docs/fonts/Manrope-OFL.txt","docs/fonts/manrope.ttf","docs/guide-content.html","docs/how-it-works-content.html","docs/implementation-content.html","docs/site/CONTRIBUTING.html","docs/site/README.html","docs/site/customising.html","docs/site/docs/CODEBASE.html","docs/site/docs/CUSTOMISING.html","docs/site/docs/DESIGN.html","docs/site/docs/GETTING_STARTED.html","docs/site/guide.html","docs/site/how-it-works.html","docs/site/implementation.html","docs/site/index.html","docs/site/style.css","docs/style-source.css","job_apply_agent/__init__.py","job_apply_agent/__main__.py","job_apply_agent/browser_fetch.py","job_apply_agent/cli.py","job_apply_agent/company_research.py","job_apply_agent/config.py","job_apply_agent/cv_formatter.py","job_apply_agent/docs_writer.py","job_apply_agent/jd_extractor.py","job_apply_agent/llm.py","job_apply_agent/local_settings.py","job_apply_agent/pipeline.py","job_apply_agent/profiles.py","job_apply_agent/prompt_loader.py","job_apply_agent/run_store.py","job_apply_agent/setup_template.py","job_apply_agent/theme.css","job_apply_agent/ui.py","package-lock.json","package.json","pyproject.toml","requirements-dev.txt","requirements.txt","scripts/build-docs.mjs","scripts/test-docs.mjs","setup.bat","setup.sh","start.bat","start.sh","streamlit_app.py","tests/conftest.py","tests/test_cli.py","tests/test_config_and_settings.py","tests/test_cv_formatter.py","tests/test_docs_writer.py","tests/test_jd_extractor.py","tests/test_llm.py","tests/test_pipeline.py","tests/test_profiles.py","tests/test_prompt_loader.py","tests/test_run_store.py","tests/test_ui.py"];const root="../../..";const site="..";const input=document.getElementById('search'),results=document.getElementById('results'),count=document.getElementById('count');function render(){const q=input.value.toLowerCase().trim();const matches=files.filter(f=>f.toLowerCase().includes(q));count.textContent=matches.length+' files';results.replaceChildren();for(const f of matches){const a=document.createElement('a');a.textContent=f;a.href=/\.md$/i.test(f)?site+'/'+f.replace(/\.md$/i,'.html'):root+'/'+f;results.append(a)}}input.addEventListener('input',render);render();for(const side of ['left','right']){const b=document.getElementById(side+'-toggle'),panel=document.getElementById(side);b.addEventListener('click',()=>{panel.hidden=!panel.hidden;b.setAttribute('aria-expanded',String(!panel.hidden));document.getElementById('layout').classList.toggle('hide-'+side,panel.hidden)})}</script></body></html>

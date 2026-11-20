@@ -16,3 +16,7 @@ __pycache__/
 
 # Marker written by tools/export_public.py (private project only)
 .exported-by-export_public
+
+# Documentation build tooling
+node_modules/
+

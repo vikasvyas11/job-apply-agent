@@ -56,35 +56,60 @@ class GoogleClients:
     drive: object
 
 
-def get_clients() -> GoogleClients:
-    creds = None
-    if config.GOOGLE_TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(str(config.GOOGLE_TOKEN_FILE), config.GOOGLE_SCOPES)
+class GoogleLoginRequired(RuntimeError):
+    """The saved Google login is missing or no longer usable, and this caller may
+    not open a browser to sign in again (for example the background batch worker)."""
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except RefreshError:
-                # Refresh token itself is dead — most commonly because this
-                # OAuth client is in "Testing" publishing status in Google
-                # Cloud Console, where Google auto-expires refresh tokens
-                # after 7 days regardless of use. No way to silently recover
-                # from this (there's no valid token left to refresh with) —
-                # fall through to a full interactive re-auth instead of
-                # crashing every job in the batch on a dead token.
-                creds = None
-        if not creds or not creds.valid:
-            if not config.GOOGLE_CREDENTIALS_FILE.exists():
-                raise FileNotFoundError(
-                    f"Missing {config.GOOGLE_CREDENTIALS_FILE}. Download an OAuth "
-                    "Desktop app client secret from Google Cloud Console and save it there "
-                    "(see SETUP.md)."
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(config.GOOGLE_CREDENTIALS_FILE), config.GOOGLE_SCOPES
+
+def _load_credentials() -> Credentials | None:
+    """The saved login, refreshed if needed; None if there is none or it can't be
+    refreshed. Refresh tokens die after 7 days while the OAuth app is in Google's
+    "Testing" mode, so a dead token here is normal, not a bug."""
+    if not config.GOOGLE_TOKEN_FILE.exists():
+        return None
+    creds = Credentials.from_authorized_user_file(str(config.GOOGLE_TOKEN_FILE), config.GOOGLE_SCOPES)
+    if creds.valid:
+        return creds
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            return None
+        config.GOOGLE_TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
+        return creds
+    return None
+
+
+def login_status() -> str:
+    """"connected", "expired" (a token exists but can't be used) or "missing"."""
+    if not config.GOOGLE_TOKEN_FILE.exists():
+        return "missing"
+    try:
+        return "connected" if _load_credentials() else "expired"
+    except (ValueError, OSError):
+        return "expired"  # unreadable token file
+
+
+def get_clients(*, interactive: bool = True) -> GoogleClients:
+    """Docs and Drive clients for the saved login. With interactive=True (the Setup
+    page), a missing or dead login opens a browser to sign in again. With
+    interactive=False (background generation) it raises GoogleLoginRequired
+    instead, because a browser prompt nobody is watching would hang the batch."""
+    creds = _load_credentials()
+    if creds is None:
+        if not interactive:
+            raise GoogleLoginRequired(
+                "Your Google login has expired or is missing. Open Setup, then Google, and click "
+                "Connect Google account, then generate again."
             )
-            creds = flow.run_local_server(port=0)
+        if not config.GOOGLE_CREDENTIALS_FILE.exists():
+            raise FileNotFoundError(
+                f"Missing {config.GOOGLE_CREDENTIALS_FILE}. Download an OAuth "
+                "Desktop app client secret from Google Cloud Console and save it there "
+                "(see docs/SETUP.md)."
+            )
+        flow = InstalledAppFlow.from_client_secrets_file(str(config.GOOGLE_CREDENTIALS_FILE), config.GOOGLE_SCOPES)
+        creds = flow.run_local_server(port=0)
         config.GOOGLE_TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
 
     docs = build("docs", "v1", credentials=creds)
@@ -184,6 +209,40 @@ def _replace_cv_tab_body(docs, document_id: str, tab_id: str, end_index: int, ra
     _replace_tab_body(docs, document_id, tab_id, end_index, plain_text, extra_requests=style_requests)
 
 
+# The cover letter is plain prose, so it gets one explicit style for the whole
+# tab rather than whatever the template's Normal text happens to be.
+COVER_LETTER_FONT_PT = 11
+COVER_LETTER_LINE_SPACING_PCT = 115
+
+
+def cover_letter_style_requests(tab_id: str, text: str) -> list[dict]:
+    """Font size and paragraph spacing for the whole cover letter. Paragraphs are
+    separated by the blank lines in the text itself, so spacing above/below is 0."""
+    end = 1 + len(text)
+    rng = {"tabId": tab_id, "startIndex": 1, "endIndex": end}
+    return [
+        {
+            "updateParagraphStyle": {
+                "range": rng,
+                "paragraphStyle": {
+                    "namedStyleType": "NORMAL_TEXT",
+                    "lineSpacing": COVER_LETTER_LINE_SPACING_PCT,
+                    "spaceAbove": {"magnitude": 0, "unit": "PT"},
+                    "spaceBelow": {"magnitude": 0, "unit": "PT"},
+                },
+                "fields": "namedStyleType,lineSpacing,spaceAbove,spaceBelow",
+            }
+        },
+        {
+            "updateTextStyle": {
+                "range": {"tabId": tab_id, "startIndex": 1, "endIndex": max(2, end - 1)},
+                "textStyle": {"fontSize": {"magnitude": COVER_LETTER_FONT_PT, "unit": "PT"}},
+                "fields": "fontSize",
+            }
+        },
+    ]
+
+
 _UNSAFE_DOC_NAME_CHARS = re.compile(r"[\\/]")
 
 
@@ -230,8 +289,10 @@ def create_application_doc(
         )
 
     _replace_cv_tab_body(clients.docs, new_doc_id, cv_tab_id, _tab_end_index(document, cv_tab_id), cv_text)
+    letter = _clean_for_docs(cover_letter_text)
     _replace_tab_body(
-        clients.docs, new_doc_id, cl_tab_id, _tab_end_index(document, cl_tab_id), _clean_for_docs(cover_letter_text)
+        clients.docs, new_doc_id, cl_tab_id, _tab_end_index(document, cl_tab_id), letter,
+        extra_requests=cover_letter_style_requests(cl_tab_id, letter),
     )
 
     return f"https://docs.google.com/document/d/{new_doc_id}/edit"
